@@ -52,6 +52,25 @@ class AuthService {
 
   static ApiClient _client() => ApiClient(_base);
 
+  static void _ensureSelfServiceConfigured() {
+    if (isLocalMode) {
+      throw const AuthMessage(
+        'Self-service account actions are disabled in local mode. '
+        'Set AUTH_BASE to the ClinAnx auth service to use register/reset.',
+      );
+    }
+
+    final authHost = Uri.tryParse(_base)?.host.toLowerCase() ?? '';
+    final tcwpnHost = Uri.tryParse(Env.tcwpnBase)?.host.toLowerCase() ?? '';
+    if (authHost.isNotEmpty && authHost == tcwpnHost) {
+      throw AuthMessage(
+        'AUTH_BASE is currently set to the TC-WPN model service ($_base). '
+        'Password reset and registration must use your auth backend '
+        '(for example: https://<org>-clinanx-auth.hf.space).',
+      );
+    }
+  }
+
   // ── SIGN IN ──────────────────────────────────────────────────────────────
 
   /// Returns a session, or null when the credentials are simply wrong.
@@ -98,6 +117,7 @@ class AuthService {
     required String password,
     required String inviteCode,
   }) async {
+    _ensureSelfServiceConfigured();
     final api = _client();
     try {
       final json = await api.post(
@@ -125,6 +145,7 @@ class AuthService {
     required String clinicianId,
     required String code,
   }) async {
+    _ensureSelfServiceConfigured();
     final api = _client();
     try {
       final json = await api.post(
@@ -141,6 +162,7 @@ class AuthService {
   }
 
   static Future<void> resendVerification(String clinicianId) async {
+    _ensureSelfServiceConfigured();
     final api = _client();
     try {
       await api.post('/auth/resend', {'clinician_id': clinicianId, 'code': ''},
@@ -160,6 +182,7 @@ class AuthService {
   /// so this cannot be used to discover who is on the study. The UI must not
   /// imply otherwise.
   static Future<void> requestReset(String email) async {
+    _ensureSelfServiceConfigured();
     final api = _client();
     try {
       await api.post('/auth/forgot-password', {'email': email},
@@ -176,6 +199,7 @@ class AuthService {
     required String code,
     required String newPassword,
   }) async {
+    _ensureSelfServiceConfigured();
     final api = _client();
     try {
       await api.post(
