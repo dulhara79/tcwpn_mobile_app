@@ -19,6 +19,8 @@ import '../../data/api/auth_service.dart';
 import '../../data/local/consent_store.dart';
 import '../../data/local/stores.dart';
 import '../shell.dart';
+import 'forgot_password_screen.dart';
+import 'register_screen.dart';
 
 class LoginScreen extends StatefulWidget {
   const LoginScreen({super.key});
@@ -140,6 +142,38 @@ class _LoginScreenState extends State<LoginScreen> {
                                     )
                                   : const Text('Sign in'),
                             ),
+                            if (AuthService.supportsSelfService) ...[
+                              const SizedBox(height: Ds.s2),
+                              TextButton(
+                                onPressed: _busy
+                                    ? null
+                                    : () => Navigator.push(
+                                        context,
+                                        MaterialPageRoute(
+                                            builder: (_) =>
+                                                const ForgotPasswordScreen())),
+                                child: const Text('Forgot your password?'),
+                              ),
+                              const Divider(height: Ds.s6),
+                              Row(
+                                mainAxisAlignment: MainAxisAlignment.center,
+                                children: [
+                                  const Text('No account yet?',
+                                      style: TextStyle(
+                                          fontSize: 13, color: Ds.inkMuted)),
+                                  TextButton(
+                                    onPressed: _busy
+                                        ? null
+                                        : () => Navigator.push(
+                                            context,
+                                            MaterialPageRoute(
+                                                builder: (_) =>
+                                                    const RegisterScreen())),
+                                    child: const Text('Register'),
+                                  ),
+                                ],
+                              ),
+                            ],
                             if (kDebugMode && AuthService.isLocalMode) ...[
                               const SizedBox(height: Ds.s4),
                               const _DevHint(),
@@ -193,6 +227,14 @@ class _LoginScreenState extends State<LoginScreen> {
         context,
         MaterialPageRoute(builder: (_) => const AppShell()),
       );
+    } on AuthMessage catch (e) {
+      // "Verify your email", "awaiting approval", "deactivated" — the clinician
+      // needs the actual reason, not a generic failure.
+      if (!mounted) return;
+      setState(() {
+        _busy = false;
+        _failure = e.message;
+      });
     } catch (_) {
       if (!mounted) return;
       setState(() {
@@ -245,9 +287,9 @@ class _DevHint extends StatelessWidget {
           children: [
             Text('DEVELOPMENT CREDENTIALS', style: AppTheme.eyebrow),
             const SizedBox(height: Ds.s2),
-            Text('DR001  ·  ClinAnx-dev',
+            Text('DR001  ·  clinanx-dev',
                 style: AppTheme.data(size: 12, weight: FontWeight.w600)),
-            Text('DR002  ·  ClinAnx-dev',
+            Text('DR002  ·  clinanx-dev',
                 style: AppTheme.data(size: 12, weight: FontWeight.w600)),
             const SizedBox(height: Ds.s2),
             const Text(

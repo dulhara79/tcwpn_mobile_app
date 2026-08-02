@@ -16,9 +16,25 @@ import 'dart:io';
 
 import 'package:http/http.dart' as http;
 
-import '../../core/config/env.dart';
+import '../../core/security/secure_http.dart';
 
-enum ApiFailure { offline, timeout, unauthorized, notFound, validation, server, malformed, unknown }
+import '../../core/config/env.dart';
+import 'session.dart';
+
+enum ApiFailure {
+  offline,
+  timeout,
+  unauthorized,
+  notFound,
+  validation,
+  server,
+  malformed,
+
+  /// The server's certificate was not signed by a pinned authority.
+  /// Almost always an intercepting proxy, occasionally a rotated CA.
+  insecureConnection,
+  unknown,
+}
 
 class ApiException implements Exception {
   final ApiFailure kind;
@@ -39,8 +55,13 @@ class ApiException implements Exception {
           'No network connection. The note is saved on this device and can be analysed once you are back online.',
         ApiFailure.timeout =>
           'The model did not respond in time. This usually means the service is starting up — try again in a moment.',
+        // 401 from the model service after a successful sign-in almost always
+        // means the 12-hour session has lapsed, not that the device was never
+        // authorised. Telling a clinician to "contact the study administrator"
+        // when they simply need to sign in again wastes everyone's time.
         ApiFailure.unauthorized =>
-          'This device is not authorised to reach the model service. Contact the study administrator.',
+          'Your session has expired. Sign out and sign in again. If that does '
+              'not help, contact the study team.',
         ApiFailure.notFound =>
           'The model endpoint could not be found. Check the service address in Settings.',
         ApiFailure.validation => 'The service rejected this request. $detail',
@@ -48,30 +69,61 @@ class ApiException implements Exception {
           'The model service reported an internal error. Nothing was saved on the server.',
         ApiFailure.malformed =>
           'The service returned a response this app could not read. Report this with the time it happened.',
+        // Deliberately specific. "Check your connection" would send a clinician
+        // on a hospital network with an inspecting proxy chasing the wrong
+        // problem for an hour.
+        ApiFailure.insecureConnection =>
+          'The connection was refused because the server\'s security '
+              'certificate could not be verified. This network may be '
+              'inspecting traffic. Do not submit patient data on it — switch '
+              'to mobile data or another network, and tell the study team.',
         ApiFailure.unknown => detail.isEmpty ? 'Something went wrong.' : detail,
       };
 
+  /// Pin failures are never retried. Retrying an intercepted connection just
+  /// hands the interceptor more attempts.
   bool get isRetryable =>
       kind == ApiFailure.timeout ||
       kind == ApiFailure.offline ||
       kind == ApiFailure.server;
 
   @override
-  String toString() => 'ApiException(${kind.name}, $statusCode, $endpoint): $detail';
+  String toString() =>
+      'ApiException(${kind.name}, $statusCode, $endpoint): $detail';
 }
 
 class ApiClient {
   final String baseUrl;
   final http.Client _http;
 
+  /// The client is chosen by base URL: a host in the pin set gets a client
+  /// whose trust store contains only the pinned roots, so an intercepting proxy
+  /// fails the handshake before any note text is written to the socket.
+  ///
+  /// Injecting a client (for tests) bypasses pinning, which is correct — a test
+  /// double is not a network path.
   ApiClient(this.baseUrl, {http.Client? client})
-      : _http = client ?? http.Client();
+      : _http = client ?? SecureHttp.clientFor(baseUrl);
 
-  Map<String, String> get _headers => {
-        'Content-Type': 'application/json',
-        'Accept': 'application/json',
-        if (Env.hfToken.isNotEmpty) 'Authorization': 'Bearer ${Env.hfToken}',
-      };
+  /// Authorization precedence, and the order matters:
+  ///
+  ///   1. The clinician's session JWT, when signed in. This is what the model
+  ///      service checks, and it is what makes every analysis attributable to
+  ///      a named clinician.
+  ///   2. The build-time HuggingFace token, only as a fallback for reaching a
+  ///      PRIVATE Space before sign-in (e.g. the /health warm-up call).
+  ///
+  /// Sending the HF token in place of the session token — which is what this
+  /// class did previously — means /predict arrives with a deploy credential
+  /// instead of a user credential, and the Space rejects it with 401.
+  Map<String, String> get _headers {
+    final bearer = Session.isActive ? Session.token! : Env.hfToken;
+    return {
+      'Content-Type': 'application/json',
+      'Accept': 'application/json',
+      if (bearer.isNotEmpty) 'Authorization': 'Bearer $bearer',
+    };
+  }
 
   Future<Map<String, dynamic>> post(
     String path,
@@ -128,6 +180,21 @@ class ApiClient {
       res = await run();
     } on TimeoutException {
       throw ApiException(kind: ApiFailure.timeout, endpoint: endpoint);
+    } on HandshakeException catch (e) {
+      // Must precede SocketException: HandshakeException is not a subtype, but
+      // treating a pin failure as "you are offline" would hide an active
+      // interception attempt behind a routine-looking message.
+      throw ApiException(
+        kind: ApiFailure.insecureConnection,
+        endpoint: endpoint,
+        detail: e.message,
+      );
+    } on PinningNotConfigured catch (e) {
+      throw ApiException(
+        kind: ApiFailure.insecureConnection,
+        endpoint: endpoint,
+        detail: e.toString(),
+      );
     } on SocketException {
       throw ApiException(kind: ApiFailure.offline, endpoint: endpoint);
     } on http.ClientException catch (e) {

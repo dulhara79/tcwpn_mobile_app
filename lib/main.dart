@@ -11,12 +11,16 @@
 // The gate is re-entered automatically whenever `kAgreementVersion` changes or
 // consent has been withdrawn — `ConsentStore.hasValidConsent()` checks both.
 
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:provider/provider.dart';
 
 import 'core/design/theme.dart';
+import 'core/security/secure_http.dart';
 import 'core/design/tokens.dart';
+import 'data/api/session.dart';
 import 'data/local/consent_store.dart';
 import 'data/local/stores.dart';
 import 'features/auth/login_screen.dart';
@@ -36,8 +40,24 @@ Future<void> main() async {
     statusBarBrightness: Brightness.light,
   ));
 
+  // Verify the certificate chain before anything else touches the network.
+  // Non-blocking: a failure does not prevent launch, because the clinician
+  // still needs to read the consent screens and the diagnostic in Settings.
+  // Every actual request is enforced independently by the trust store.
+  unawaited(SecureHttp.verifyAll());
+
   final consented = await ConsentStore.hasValidConsent();
   final signedIn = consented && await SecureStore.hasSession();
+
+  // Restore the bearer token into memory so the first request after a warm
+  // start is authenticated. Skipping this makes the app look signed in while
+  // every model call returns 401.
+  if (signedIn) {
+    Session.set(
+      token: await SecureStore.token() ?? '',
+      clinicianId: await SecureStore.clinicianId(),
+    );
+  }
 
   runApp(ClinAnxApp(consented: consented, signedIn: signedIn));
 }

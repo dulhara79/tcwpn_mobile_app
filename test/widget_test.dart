@@ -14,7 +14,7 @@ import 'package:r26_ds012_app/main.dart';
 
 void main() {
   testWidgets('boots to sign-in when there is no session', (tester) async {
-    await tester.pumpWidget(const AnxietyConsoleApp(signedIn: false));
+    await tester.pumpWidget(const ClinAnxApp(consented: false, signedIn: false));
     await tester.pump();
     expect(find.text('Sign in'), findsOneWidget);
   });
