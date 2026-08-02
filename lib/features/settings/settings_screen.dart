@@ -13,9 +13,12 @@ import '../../core/config/env.dart';
 import '../../core/design/components.dart';
 import '../../core/design/theme.dart';
 import '../../core/design/tokens.dart';
+import '../../core/security/secure_http.dart';
+import '../../data/api/session.dart';
 import '../../data/local/stores.dart';
 import '../../state/controllers.dart';
 import '../auth/login_screen.dart';
+import '../../core/security/pinned_certificates.dart';
 
 class SettingsScreen extends StatelessWidget {
   const SettingsScreen({super.key});
@@ -147,6 +150,9 @@ class SettingsScreen extends StatelessWidget {
                   ),
           ),
           const SizedBox(height: Ds.s5),
+          SectionLabel('Connection security'),
+          const _PinningPanel(),
+          const SizedBox(height: Ds.s5),
           SectionLabel('Data governance'),
           Panel(
             child: Column(
@@ -205,6 +211,7 @@ class SettingsScreen extends StatelessWidget {
     );
     if (ok != true || !context.mounted) return;
     await SecureStore.signOut();
+    Session.clear();
     if (!context.mounted) return;
     Navigator.pushAndRemoveUntil(
       context,
@@ -301,4 +308,191 @@ class _GovRow extends StatelessWidget {
           ),
         ],
       );
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// TLS pinning status
+//
+// Reports what is actually true rather than a reassuring constant. A clinician
+// on a hospital network that inspects traffic needs to see WHY submissions are
+// failing, and the study team needs to see when the pin set is going stale
+// before it becomes an outage someone else discovers.
+// ─────────────────────────────────────────────────────────────────────────────
+class _PinningPanel extends StatefulWidget {
+  const _PinningPanel();
+  @override
+  State<_PinningPanel> createState() => _PinningPanelState();
+}
+
+class _PinningPanelState extends State<_PinningPanel> {
+  bool _checking = false;
+  List<PinReport> _reports = SecureHttp.reports;
+
+  Future<void> _recheck() async {
+    setState(() => _checking = true);
+    final r = await SecureHttp.verifyAll();
+    if (!mounted) return;
+    setState(() {
+      _reports = r;
+      _checking = false;
+    });
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final configured = SecureHttp.isPinnedHost0Configured;
+    final allOk = _reports.isNotEmpty && _reports.every((r) => r.isHealthy);
+
+    return Column(
+      children: [
+        if (kPinningDisabled)
+          const Padding(
+            padding: EdgeInsets.only(bottom: Ds.s3),
+            child: InlineNotice(
+              icon: Icons.gpp_bad_outlined,
+              tone: Ds.red,
+              text: 'Certificate pinning is DISABLED by a build flag. This '
+                  'build must not be used with patient data.',
+            ),
+          )
+        else if (!configured)
+          const Padding(
+            padding: EdgeInsets.only(bottom: Ds.s3),
+            child: InlineNotice(
+              icon: Icons.gpp_maybe_outlined,
+              tone: Ds.red,
+              text: 'No certificates are pinned. Run tool/pin_certs.py and '
+                  'rebuild before using this with patient data.',
+            ),
+          )
+        else if (SecureHttp.needsReview)
+          Padding(
+            padding: const EdgeInsets.only(bottom: Ds.s3),
+            child: InlineNotice(
+              icon: Icons.update_outlined,
+              tone: Ds.amber,
+              text: 'The pinned certificate set is past its review date '
+                  '($kPinsReviewBy). Regenerate it before it drifts out of '
+                  'date and blocks connections.',
+            ),
+          ),
+        Panel(
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Row(
+                children: [
+                  Icon(
+                    allOk ? Icons.verified_user_rounded : Icons.shield_outlined,
+                    size: 17,
+                    color: allOk ? Ds.green : Ds.inkMuted,
+                  ),
+                  const SizedBox(width: Ds.s3),
+                  Expanded(
+                    child: Text(
+                      configured && !kPinningDisabled
+                          ? 'Traffic is restricted to pinned certificate '
+                              'authorities'
+                          : 'Pinning is not active',
+                      style: const TextStyle(
+                          fontSize: 13, fontWeight: FontWeight.w600),
+                    ),
+                  ),
+                ],
+              ),
+              const SizedBox(height: Ds.s2),
+              const Text(
+                'Clinical note text crosses the public internet. Pinning means '
+                'the app trusts only the certificate authority that actually '
+                'serves these hosts — an intercepting proxy is refused before '
+                'any text is sent.',
+                style:
+                    TextStyle(fontSize: 11.5, color: Ds.inkFaint, height: 1.45),
+              ),
+              const SizedBox(height: Ds.s4),
+              const Divider(),
+              const SizedBox(height: Ds.s3),
+              if (_reports.isEmpty)
+                Text('Not checked yet.',
+                    style: AppTheme.data(size: 11.5, color: Ds.inkFaint))
+              else
+                ..._reports.map(_row),
+              const SizedBox(height: Ds.s3),
+              Row(
+                children: [
+                  Text('Pins generated $kPinsGeneratedOn',
+                      style: AppTheme.data(size: 10.5, color: Ds.inkFaint)),
+                  const Spacer(),
+                  TextButton(
+                    onPressed: _checking ? null : _recheck,
+                    style: TextButton.styleFrom(
+                      padding: const EdgeInsets.symmetric(horizontal: Ds.s2),
+                      minimumSize: Size.zero,
+                      tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                    ),
+                    child: Text(_checking ? 'Checking…' : 'Check now'),
+                  ),
+                ],
+              ),
+            ],
+          ),
+        ),
+      ],
+    );
+  }
+
+  Widget _row(PinReport r) {
+    final (color, label) = switch (r.status) {
+      PinStatus.ok => (Ds.green, 'verified'),
+      PinStatus.stale => (Ds.amber, 'review due'),
+      PinStatus.disabled => (Ds.red, 'disabled'),
+      PinStatus.notChecked => (Ds.inkFaint, 'not configured'),
+      PinStatus.hostUnreachable => (Ds.inkFaint, 'unreachable'),
+      PinStatus.pinMismatch => (Ds.red, 'REFUSED'),
+    };
+
+    return Padding(
+      padding: const EdgeInsets.only(bottom: Ds.s3),
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Container(
+            width: 7,
+            height: 7,
+            margin: const EdgeInsets.only(top: 5),
+            decoration: BoxDecoration(color: color, shape: BoxShape.circle),
+          ),
+          const SizedBox(width: Ds.s3),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Row(
+                  children: [
+                    Expanded(
+                      child: Text(r.host,
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                          style: AppTheme.data(
+                              size: 11.5, weight: FontWeight.w600)),
+                    ),
+                    const SizedBox(width: Ds.s2),
+                    Text(label,
+                        style: TextStyle(
+                            fontSize: 10.5,
+                            fontWeight: FontWeight.w700,
+                            color: color)),
+                  ],
+                ),
+                const SizedBox(height: 2),
+                Text(r.detail,
+                    style: const TextStyle(
+                        fontSize: 11, color: Ds.inkFaint, height: 1.4)),
+              ],
+            ),
+          ),
+        ],
+      ),
+    );
+  }
 }
