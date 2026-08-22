@@ -20,6 +20,7 @@ import '../domain/models.dart';
 import '../state/controllers.dart';
 import 'alerts/alerts_screen.dart';
 import 'chart/patient_chart_screen.dart';
+import 'patients/scan_patient_id_screen.dart';
 import 'settings/settings_screen.dart';
 import 'tcwpn/support_set_screen.dart';
 
@@ -606,6 +607,14 @@ class _AddPatientSheetState extends State<AddPatientSheet> {
     super.dispose();
   }
 
+  Future<void> _scanParticipantId() async {
+    final participantId = await Navigator.of(context).push<String>(
+      MaterialPageRoute(builder: (_) => const ScanPatientIdScreen()),
+    );
+    if (participantId == null || !mounted) return;
+    _mrn.text = participantId;
+  }
+
   @override
   Widget build(BuildContext context) => Padding(
         padding: EdgeInsets.only(
@@ -635,19 +644,34 @@ class _AddPatientSheetState extends State<AddPatientSheet> {
                 Text('Add patient', style: AppTheme.display(size: 20)),
                 const SizedBox(height: Ds.s1),
                 const Text(
-                  'The MRN is the key that links this patient across all four '
-                  'components. It must match the record used by the wearable and '
-                  'sensing studies.',
+                  'Scan the QR shown in the patient\'s Aura app. This copies '
+                  'their Participant ID so all four components use the same '
+                  'record.',
                   style: TextStyle(fontSize: 12.5, color: Ds.inkMuted, height: 1.45),
                 ),
-                const SizedBox(height: Ds.s5),
+                const SizedBox(height: Ds.s4),
+                OutlinedButton.icon(
+                  onPressed: _scanParticipantId,
+                  icon: const Icon(Icons.qr_code_scanner_rounded),
+                  label: const Text('Scan Aura QR'),
+                ),
+                const SizedBox(height: Ds.s3),
                 TextFormField(
                   controller: _mrn,
                   textCapitalization: TextCapitalization.characters,
+                  autocorrect: false,
                   decoration: const InputDecoration(
-                      labelText: 'MRN', hintText: 'e.g. P100234'),
-                  validator: (v) =>
-                      (v ?? '').trim().isEmpty ? 'MRN is required' : null,
+                    labelText: 'Aura Participant ID',
+                    hintText: 'P_7F3A9C2E4B10D6C1',
+                  ),
+                  validator: (v) {
+                    final id = (v ?? '').trim().toUpperCase();
+                    if (id.isEmpty) return 'Participant ID is required';
+                    if (!RegExp(r'^P_[A-F0-9]{16}$').hasMatch(id)) {
+                      return 'Scan or enter a valid Aura Participant ID';
+                    }
+                    return null;
+                  },
                 ),
                 const SizedBox(height: Ds.s3),
                 TextFormField(
