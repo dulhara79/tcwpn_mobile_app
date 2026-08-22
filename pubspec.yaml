@@ -23,6 +23,7 @@ dependencies:
   # ── Networking ────────────────────────────────────────────────────────────
   http: ^1.2.2
   connectivity_plus: ^6.0.5
+  mobile_scanner: ^6.0.11
 
   # ── Typography ────────────────────────────────────────────────────────────
   # ADDED: Inter Tight / Inter / IBM Plex Mono, the three type roles.
