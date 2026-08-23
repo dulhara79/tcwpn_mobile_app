@@ -1,0 +1,72 @@
+name: Sync to Research Repository
+
+on:
+  push:
+    branches:
+      - main
+
+jobs:
+  sync:
+    runs-on: ubuntu-latest
+    env:
+      FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
+    steps:
+      - name: Checkout Source Repository
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Checkout Target Repository
+        uses: actions/checkout@v4
+        with:
+          repository: dulhara79/R26-DS-012
+          token: ${{ secrets.SYNC_REPO_TOKEN }}
+          path: target-repo
+          fetch-depth: 0
+
+      - name: Sync Files
+        run: |
+          # Define target folder
+          TARGET_DIR="target-repo/apps/tcwpn-clinical-app"
+          
+          # Create folder if it doesn't exist
+          mkdir -p "$TARGET_DIR"
+          
+          # Sync files excluding git metadata and GitHub workflows of the source
+          # Using rsync for efficient mirroring
+          rsync -av --delete \
+            --exclude '.git/' \
+            --exclude '.github/' \
+            --exclude 'target-repo/' \
+            ./ "$TARGET_DIR/"
+
+      - name: Create Pull Request in Target Repository
+        working-directory: target-repo
+        env:
+          GITHUB_TOKEN: ${{ secrets.SYNC_REPO_TOKEN }}
+        run: |
+          # Configure Git
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          
+          # Create a unique branch name
+          BRANCH_NAME="sync/tcwpn-app-$(date +%Y%m%d%H%M%S)"
+          git checkout -b "$BRANCH_NAME"
+          
+          # Check for changes
+          if [ -z "$(git status --porcelain)" ]; then
+            echo "No changes to sync."
+            exit 0
+          fi
+          
+          # Commit and Push
+          git add .
+          git commit -m "Sync: Update tcwpn-clinical-app from source"
+          git push origin "$BRANCH_NAME"
+          
+          # Open Pull Request using GitHub CLI
+          gh pr create \
+            --title "Sync: Update tcwpn-clinical-app" \
+            --body "This PR was automatically generated to sync changes from the [tcwpn_app](https://github.com/dulhara79/tcwpn_app) repository. Please review and merge." \
+            --base main \
+            --head "$BRANCH_NAME"
