@@ -577,15 +577,53 @@ class SupportNote {
 }
 
 /// A clinical note plus its TC-WPN analysis, as filed in the patient chart.
+/// Where a note sits in its lifecycle.
+///
+/// This is stored EXPLICITLY rather than inferred from `result == null`. The
+/// previous build inferred it, which made two very different situations
+/// indistinguishable: a note the clinician deliberately parked as a draft, and
+/// a note that was submitted, reached the backend, and came back with no
+/// component detail. The first must offer "Analyse"; the second must say the
+/// service returned no assessment. Collapsing them is how a submitted note ends
+/// up looking unwritten.
+enum ClinicalNoteStatus {
+  /// Written and saved locally. Never sent, or sent and not yet answered.
+  draft,
+
+  /// Sent, and the backend returned a usable assessment.
+  analysed,
+
+  /// Sent, and the attempt failed. The TEXT IS STILL SAFE — this state exists so
+  /// the UI can say "saved, not analysed" instead of losing the distinction.
+  analysisFailed,
+}
+
 class ClinicalNote {
   final String id;
   final String patientMrn;
+
+  /// When the clinician first wrote the note. Stable across edits — this is the
+  /// clinical event date, and it is what goes to the backend as `note_date`.
   final DateTime recordedAt;
+
+  /// When the note was last edited on this device. Null if never edited.
+  final DateTime? updatedAt;
+
   final String text;
   final String noteType;
   final String clinicianId;
   final TcwpnResult? result;
   final String? clinicianComment;
+
+  /// Explicit lifecycle state. See [ClinicalNoteStatus].
+  final ClinicalNoteStatus status;
+
+  /// The clinician-facing reason the last analysis attempt failed. Cleared on a
+  /// successful analysis. Never contains a URL, a status code, or a service name.
+  final String? lastAnalysisError;
+
+  /// When the current [result] was produced. Null when there is no result.
+  final DateTime? analysedAt;
 
   /// Set when a clinician explicitly agrees or disagrees with the model.
   /// This is the HITL audit trail the proposal requires (§4.4 / §6).
@@ -598,57 +636,119 @@ class ClinicalNote {
     required this.text,
     required this.noteType,
     required this.clinicianId,
+    this.updatedAt,
     this.result,
     this.clinicianComment,
     this.clinicianVerdict,
+    this.status = ClinicalNoteStatus.draft,
+    this.lastAnalysisError,
+    this.analysedAt,
   });
 
-  bool get isDraft => result == null;
+  bool get isDraft => status == ClinicalNoteStatus.draft;
+  bool get isAnalysed =>
+      status == ClinicalNoteStatus.analysed && result != null;
+  bool get analysisFailed => status == ClinicalNoteStatus.analysisFailed;
 
+  /// True when this note has been analysed before, so the action is
+  /// "Re-analyse" rather than "Analyse".
+  bool get hasBeenAnalysed => result != null;
+
+  /// True when the text has changed since the assessment on screen was produced,
+  /// which makes that assessment stale relative to what the clinician is reading.
+  bool get resultIsStale =>
+      result != null &&
+      analysedAt != null &&
+      updatedAt != null &&
+      updatedAt!.isAfter(analysedAt!);
+
+  /// Editing a draft must UPDATE it, never mint a second one. `clearResult`
+  /// exists because `result ?? this.result` can only ever set a result, so the
+  /// old copyWith had no way to express "this note is being rewritten and the
+  /// previous assessment no longer describes it".
   ClinicalNote copyWith({
+    String? text,
+    String? noteType,
+    DateTime? updatedAt,
     TcwpnResult? result,
+    bool clearResult = false,
     String? clinicianComment,
     String? clinicianVerdict,
+    ClinicalNoteStatus? status,
+    String? lastAnalysisError,
+    bool clearAnalysisError = false,
+    DateTime? analysedAt,
   }) =>
       ClinicalNote(
         id: id,
         patientMrn: patientMrn,
         recordedAt: recordedAt,
-        text: text,
-        noteType: noteType,
+        updatedAt: updatedAt ?? this.updatedAt,
+        text: text ?? this.text,
+        noteType: noteType ?? this.noteType,
         clinicianId: clinicianId,
-        result: result ?? this.result,
+        result: clearResult ? null : (result ?? this.result),
         clinicianComment: clinicianComment ?? this.clinicianComment,
         clinicianVerdict: clinicianVerdict ?? this.clinicianVerdict,
+        status: status ?? this.status,
+        lastAnalysisError: clearAnalysisError
+            ? null
+            : (lastAnalysisError ?? this.lastAnalysisError),
+        analysedAt: clearResult ? null : (analysedAt ?? this.analysedAt),
       );
 
   Map<String, dynamic> toJson() => {
         'id': id,
         'patient_mrn': patientMrn,
         'recorded_at': recordedAt.toIso8601String(),
+        'updated_at': updatedAt?.toIso8601String(),
         'text': text,
         'note_type': noteType,
         'clinician_id': clinicianId,
         'result': result?.toJson(),
         'clinician_comment': clinicianComment,
         'clinician_verdict': clinicianVerdict,
+        'status': status.name,
+        'last_analysis_error': lastAnalysisError,
+        'analysed_at': analysedAt?.toIso8601String(),
       };
 
-  factory ClinicalNote.fromJson(Map<String, dynamic> j) => ClinicalNote(
-        id: _s(j['id'], DateTime.now().microsecondsSinceEpoch.toString()),
-        patientMrn: _s(j['patient_mrn'] ?? j['patientId']),
-        recordedAt: _dt(j['recorded_at'] ?? j['timestamp']),
-        text: _s(j['text'] ?? j['noteText']),
-        noteType: _s(j['note_type'] ?? j['noteType'], 'Psychiatry note'),
-        clinicianId: _s(j['clinician_id'] ?? j['clinicianId']),
-        result: j['result'] is Map
-            ? TcwpnResult.fromJson(Map<String, dynamic>.from(j['result']))
-            : null,
-        clinicianComment:
-            j['clinician_comment'] == null ? null : _s(j['clinician_comment']),
-        clinicianVerdict:
-            j['clinician_verdict'] == null ? null : _s(j['clinician_verdict']),
-      );
+  factory ClinicalNote.fromJson(Map<String, dynamic> j) {
+    final result = j['result'] is Map
+        ? TcwpnResult.fromJson(Map<String, dynamic>.from(j['result']))
+        : null;
+
+    // Notes written by the previous build carry no `status`. Reconstruct it the
+    // way that build meant it — a result present meant analysed — so an upgrade
+    // does not silently reopen every historical note as a draft.
+    final status = switch (_s(j['status'])) {
+      'analysed' => ClinicalNoteStatus.analysed,
+      'analysisFailed' => ClinicalNoteStatus.analysisFailed,
+      'draft' => ClinicalNoteStatus.draft,
+      _ =>
+        result != null ? ClinicalNoteStatus.analysed : ClinicalNoteStatus.draft,
+    };
+
+    return ClinicalNote(
+      id: _s(j['id'], DateTime.now().microsecondsSinceEpoch.toString()),
+      patientMrn: _s(j['patient_mrn'] ?? j['patientId']),
+      recordedAt: _dt(j['recorded_at'] ?? j['timestamp']),
+      updatedAt: j['updated_at'] == null ? null : _dt(j['updated_at']),
+      text: _s(j['text'] ?? j['noteText']),
+      noteType: _s(j['note_type'] ?? j['noteType'], 'Psychiatry note'),
+      clinicianId: _s(j['clinician_id'] ?? j['clinicianId']),
+      result: result,
+      clinicianComment:
+          j['clinician_comment'] == null ? null : _s(j['clinician_comment']),
+      clinicianVerdict:
+          j['clinician_verdict'] == null ? null : _s(j['clinician_verdict']),
+      status: status,
+      lastAnalysisError: j['last_analysis_error'] == null
+          ? null
+          : _s(j['last_analysis_error']),
+      analysedAt: j['analysed_at'] == null ? null : _dt(j['analysed_at']),
+    );
+  }
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
