@@ -104,10 +104,10 @@ class ApiClient {
   ///   Central Backend — a single shared app token (main.py::_auth compares the
   ///                     header against one static BACKEND_API_TOKEN). The
   ///                     clinician's JWT is NOT what it checks.
-  ///   C3 / auth       — the clinician's session JWT.
-  ///   TC-WPN /health  — the build-time HF token, for a private Space.
+  ///   auth service    — the clinician's session JWT.
+  ///   TC-WPN /health  — no credential; /health is unauthenticated.
   ///
-  /// Defaults to the previous behaviour: session JWT when signed in, HF token
+  /// Defaults to the session JWT when signed in, and to no Authorization header
   /// otherwise.
   final String Function() _bearer;
 
@@ -121,20 +121,16 @@ class ApiClient {
       : _http = client ?? SecureHttp.clientFor(baseUrl),
         _bearer = bearer ?? _defaultBearer;
 
-  static String _defaultBearer() =>
-      Session.isActive ? Session.token! : Env.hfToken;
+  /// No privileged service token ships in the APK. Anything inside an APK is
+  /// extractable, and the only call this app makes without a session is the
+  /// TC-WPN /health warm-up, which needs no credential at all. A gateway that
+  /// genuinely needs a token now passes one explicitly through the `bearer`
+  /// constructor argument, which puts every credential at its call site.
+  static String _defaultBearer() => Session.isActive ? Session.token! : '';
 
-  /// Authorization precedence, and the order matters:
-  ///
-  ///   1. The clinician's session JWT, when signed in. This is what the model
-  ///      service checks, and it is what makes every analysis attributable to
-  ///      a named clinician.
-  ///   2. The build-time HuggingFace token, only as a fallback for reaching a
-  ///      PRIVATE Space before sign-in (e.g. the /health warm-up call).
-  ///
-  /// Sending the HF token in place of the session token — which is what this
-  /// class did previously — means /predict arrives with a deploy credential
-  /// instead of a user credential, and the Space rejects it with 401.
+  /// Omits Authorization entirely when there is no credential, rather than
+  /// sending `Bearer ` with an empty value — an empty bearer is a 401 that
+  /// reads like a wrong password instead of like a missing session.
   Map<String, String> get _headers {
     final bearer = _bearer();
     return {
