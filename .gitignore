@@ -80,3 +80,4 @@ app.*.map.json
 
 lib/core/config/env.dart
 BUILD.md
+.env
