@@ -317,6 +317,7 @@ class ChartController extends ChangeNotifier {
     final resolved = await _backend.resolveMrn(mrn);
     if (resolved != null) {
       _subjectId = resolved;
+      await _linkBehaviouralId(resolved);
       await RecordStore.saveSubjectId(mrn, resolved);
       notifyListeners();
       return resolved;
@@ -324,10 +325,45 @@ class ChartController extends ChangeNotifier {
 
     final enrolment = await _backend.enrol(mrn: mrn, enrolledBy: clinicianId);
     _subjectId = enrolment.subjectId;
+    await _linkBehaviouralId(enrolment.subjectId);
     _pendingPairing = enrolment;
     await RecordStore.saveSubjectId(mrn, enrolment.subjectId);
     notifyListeners();
     return enrolment.subjectId;
+  }
+
+  /// The identifier the patient app (Aura) shows as a QR is a C2 PARTICIPANT ID,
+  /// in the form `P_` followed by 16 hex digits — the same shape as
+  /// `C2_TEST_SUBJECT=P_65DC4002E7863773` in the backend's env.example.
+  ///
+  /// This app uses that value as its patient key, which is fine on its own: the
+  /// backend treats whatever it receives as an opaque MRN, hashes it under the
+  /// pepper, and mints its own `subject_id`. But the backend then knows this
+  /// patient ONLY by that UUID, and `_external_id(db, subject_id,
+  /// 'c2_behavioral')` falls back to it when no alias is registered — so the
+  /// backend ends up asking C2 about an id C2 has never seen, and the
+  /// behavioural reading comes back empty for a patient whose real C2 id we
+  /// were holding the whole time.
+  ///
+  /// Registering the alias is idempotent per modality. A 409 means this
+  /// participant id is already mapped to a DIFFERENT subject, which is a real
+  /// cross-patient error and is deliberately allowed to surface.
+  static final RegExp _participantIdPattern = RegExp(r'^P_[A-F0-9]{16}$');
+
+  Future<void> _linkBehaviouralId(String subjectId) async {
+    final candidate = mrn.trim().toUpperCase();
+    if (!_participantIdPattern.hasMatch(candidate)) return;
+    try {
+      await _backend.registerExternalId(
+        subjectId: subjectId,
+        modality: Modality.c2Behavioral,
+        externalId: candidate,
+      );
+    } on ApiException catch (e) {
+      // Surfaced, not swallowed — see the 409 case above.
+      _error = 'Could not link the Aura Participant ID to this patient on the '
+          'backend: ${e.message}';
+    }
   }
 
   /// Registers the id another component knows this patient by, so the backend
@@ -446,7 +482,8 @@ class ChartController extends ChangeNotifier {
     // A blocked fusion is GREY and has no composite. It is not an escalation,
     // and it must not be silently treated as one in either direction.
     if (!result.hasComposite) return;
-    if (result.band != AlertBand.red && result.band != AlertBand.darkRed) return;
+    if (result.band != AlertBand.red && result.band != AlertBand.darkRed)
+      return;
 
     await roster.raiseAlert(ClinicalAlert(
       id: _uuid.v4(),
@@ -549,7 +586,8 @@ class ChartController extends ChangeNotifier {
   /// Records the clinician's agreement or disagreement with a prediction. This
   /// is the human-in-the-loop audit trail; it is stored with the note and
   /// exported in the PDF.
-  Future<void> recordVerdict(String noteId, String verdict, String? comment) async {
+  Future<void> recordVerdict(
+      String noteId, String verdict, String? comment) async {
     _notes = _notes
         .map((n) => n.id == noteId
             ? n.copyWith(clinicianVerdict: verdict, clinicianComment: comment)
