@@ -30,6 +30,12 @@ enum ApiFailure {
   server,
   malformed,
 
+  /// No base URL was compiled into this build. Distinct from [notFound]: the
+  /// service was never addressed, so nothing was reached and nothing 404'd.
+  /// Reporting this as "endpoint not found" sends the clinician to a Settings
+  /// screen that cannot fix it — the fix is a rebuild with --dart-define.
+  notConfigured,
+
   /// The server's certificate was not signed by a pinned authority.
   /// Almost always an intercepting proxy, occasionally a rotated CA.
   insecureConnection,
@@ -62,11 +68,24 @@ class ApiException implements Exception {
         ApiFailure.unauthorized =>
           'Your session has expired. Sign out and sign in again. If that does '
               'not help, contact the study team.',
+        // A 404 here is an APP-SIDE or DEPLOYMENT fault: the route this build
+        // asks for is not the route the running service serves. A clinician can
+        // do nothing about that, and telling them to "check the service address
+        // in Settings" invites them to edit a value that is compiled in. Say
+        // what is true — it is broken, it is not their doing, and their work is
+        // intact — and give the study team the one word they need.
         ApiFailure.notFound =>
-          'The model endpoint could not be found. Check the service address in Settings.',
+          'The clinical service could not be reached at the address this app was '
+              'built with. Nothing you entered has been lost. Please report this '
+              'to the study team (routing error).',
+        ApiFailure.notConfigured =>
+          'This build has no clinical service configured, so nothing can be '
+              'analysed. Your work is saved on this device. The study team needs '
+              'to reinstall a configured build.',
         ApiFailure.validation => 'The service rejected this request. $detail',
         ApiFailure.server =>
-          'The model service reported an internal error. Nothing was saved on the server.',
+          'The clinical service reported an internal error. Nothing was saved on '
+              'the server; your note is still safe on this device.',
         ApiFailure.malformed =>
           'The service returned a response this app could not read. Report this with the time it happened.',
         // Deliberately specific. "Check your connection" would send a clinician
@@ -184,7 +203,7 @@ class ApiClient {
   ) async {
     if (baseUrl.isEmpty) {
       throw ApiException(
-        kind: ApiFailure.notFound,
+        kind: ApiFailure.notConfigured,
         endpoint: endpoint,
         detail: 'No base URL configured for this service.',
       );
