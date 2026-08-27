@@ -12,6 +12,7 @@
 
 import 'dart:async';
 import 'dart:convert';
+import 'dart:developer' as developer;
 import 'dart:io';
 
 import 'package:http/http.dart' as http;
@@ -20,6 +21,30 @@ import '../../core/security/secure_http.dart';
 
 import '../../core/config/env.dart';
 import 'session.dart';
+
+// ─────────────────────────────────────────────────────────────────────────────
+// DIAGNOSTICS — temporary, and removable by deleting this block plus the four
+// _trace* call sites in _send.
+//
+//     flutter run --release --dart-define=API_DEBUG=true
+//     adb logcat -s flutter
+//
+// Off by default, so a shipped build emits nothing. What it prints is chosen to
+// answer one question — which endpoint returned what, carrying which kind of
+// credential — WITHOUT printing the credential:
+//
+//     POST /v1/clinical-notes  host=…  authorization_present=true  token_length=44
+//     POST /v1/clinical-notes  status 401 -> unauthorized
+//
+// NEVER logs: the bearer token, the backend token, passwords, note text.
+// Query strings are redacted because /v1/subjects/resolve?mrn=… is the raw MRN.
+// ─────────────────────────────────────────────────────────────────────────────
+const bool kApiDebug = bool.fromEnvironment('API_DEBUG', defaultValue: false);
+
+String _redactPath(String path) {
+  final q = path.indexOf('?');
+  return q < 0 ? path : '${path.substring(0, q)}?<redacted>';
+}
 
 enum ApiFailure {
   offline,
@@ -169,6 +194,7 @@ class ApiClient {
             .post(_uri(path), headers: _headers, body: jsonEncode(body))
             .timeout(timeout ?? Env.inferenceTimeout),
         path,
+        'POST',
       );
 
   Future<Map<String, dynamic>> get(
@@ -184,6 +210,7 @@ class ApiClient {
               .get(_uri(path), headers: _headers)
               .timeout(timeout ?? Env.quickTimeout),
           path,
+          'GET',
         );
       } on ApiException catch (e) {
         last = e;
@@ -200,8 +227,10 @@ class ApiClient {
   Future<Map<String, dynamic>> _send(
     Future<http.Response> Function() run,
     String endpoint,
+    String method,
   ) async {
     if (baseUrl.isEmpty) {
+      _trace(endpoint, 'no base URL compiled into this build');
       throw ApiException(
         kind: ApiFailure.notConfigured,
         endpoint: endpoint,
@@ -209,10 +238,13 @@ class ApiClient {
       );
     }
 
+    _traceRequest(method, endpoint);
+
     late http.Response res;
     try {
       res = await run();
     } on TimeoutException {
+      _trace(endpoint, 'exception TimeoutException -> timeout');
       throw ApiException(kind: ApiFailure.timeout, endpoint: endpoint);
     } on HandshakeException catch (e) {
       // Must precede SocketException: HandshakeException is not a subtype, but
@@ -230,25 +262,30 @@ class ApiClient {
         detail: e.toString(),
       );
     } on SocketException {
+      _trace(endpoint, 'exception SocketException -> offline');
       throw ApiException(kind: ApiFailure.offline, endpoint: endpoint);
     } on http.ClientException catch (e) {
+      _trace(endpoint, 'exception ClientException -> offline');
       throw ApiException(
           kind: ApiFailure.offline, endpoint: endpoint, detail: e.message);
     } catch (e) {
+      _trace(endpoint, 'exception ${e.runtimeType} -> unknown');
       throw ApiException(
           kind: ApiFailure.unknown, endpoint: endpoint, detail: e.toString());
     }
 
     // Status first, body second. Always.
     if (res.statusCode >= 400) {
+      final kind = switch (res.statusCode) {
+        401 || 403 => ApiFailure.unauthorized,
+        404 => ApiFailure.notFound,
+        422 || 400 => ApiFailure.validation,
+        >= 500 => ApiFailure.server,
+        _ => ApiFailure.unknown,
+      };
+      _trace(endpoint, 'status ${res.statusCode} -> ${kind.name}');
       throw ApiException(
-        kind: switch (res.statusCode) {
-          401 || 403 => ApiFailure.unauthorized,
-          404 => ApiFailure.notFound,
-          422 || 400 => ApiFailure.validation,
-          >= 500 => ApiFailure.server,
-          _ => ApiFailure.unknown,
-        },
+        kind: kind,
         statusCode: res.statusCode,
         endpoint: endpoint,
         detail: _extractDetail(res.body),
@@ -257,9 +294,14 @@ class ApiClient {
 
     try {
       final decoded = jsonDecode(res.body);
+      _trace(endpoint, 'status ${res.statusCode} ok');
       if (decoded is Map<String, dynamic>) return decoded;
       return {'data': decoded};
     } catch (_) {
+      _trace(
+          endpoint,
+          'status ${res.statusCode} but body is not JSON '
+          '(${res.body.length} bytes) -> malformed');
       throw ApiException(
         kind: ApiFailure.malformed,
         statusCode: res.statusCode,
@@ -267,6 +309,29 @@ class ApiClient {
         detail: res.body.substring(0, res.body.length.clamp(0, 200)),
       );
     }
+  }
+
+  /// Says which endpoint was called, against which host, and whether this
+  /// client attached a credential at all — the three facts that separate
+  /// "wrong token" from "no token compiled in" from "wrong address".
+  ///
+  /// `token_length` is a length, never a value. It is enough to tell an empty
+  /// define from a populated one, and useless to anyone reading the log.
+  void _traceRequest(String method, String path) {
+    if (!kApiDebug) return;
+    final bearer = _bearer();
+    final host = Uri.tryParse(baseUrl)?.host ?? '(unparseable)';
+    developer.log(
+      '$method ${_redactPath(path)}  host=$host  '
+      'authorization_present=${bearer.isNotEmpty}  '
+      'token_length=${bearer.length}',
+      name: 'ClinAnx.api',
+    );
+  }
+
+  void _trace(String endpoint, String what) {
+    if (!kApiDebug) return;
+    developer.log('${_redactPath(endpoint)}  $what', name: 'ClinAnx.api');
   }
 
   /// FastAPI puts errors under `detail`; some Spaces use `error`. Fall back to
