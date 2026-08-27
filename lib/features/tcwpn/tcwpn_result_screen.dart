@@ -27,7 +27,16 @@ import 'note_analysis_screen.dart';
 
 class TcwpnResultScreen extends StatefulWidget {
   final ClinicalNote note;
-  const TcwpnResultScreen({super.key, required this.note});
+
+  /// The ingest response for THIS submission, when the screen was opened
+  /// straight after an analysis. Passed explicitly rather than read from the
+  /// controller, because `ChartController.lastIngest` describes whichever note
+  /// was submitted most recently — attaching it to an older note opened from
+  /// history would show one run's fusion outcome beside another run's score.
+  /// Null when the note was opened from the chart.
+  final ClinicalNoteIngestResult? ingest;
+
+  const TcwpnResultScreen({super.key, required this.note, this.ingest});
 
   @override
   State<TcwpnResultScreen> createState() => _TcwpnResultScreenState();
@@ -40,14 +49,14 @@ class _TcwpnResultScreenState extends State<TcwpnResultScreen> {
   Widget build(BuildContext context) {
     final r = _note.result;
     if (r == null) {
-      return Scaffold(
-        appBar: AppBar(title: const Text('Clinical note')),
-        body: const EmptyState(
-          icon: Icons.pending_outlined,
-          title: 'Not analysed yet',
-          body: 'This note is saved as a draft. Analyse it to produce a score.',
-        ),
-      );
+      // THREE STATES, NOT TWO.
+      //
+      // A null `result` used to mean "not analysed". It does not: the Central
+      // Backend scores every note and returns that score, but returns the
+      // model's explanation payload only when configured to. A scored note
+      // with no payload is a completed assessment shown in reduced form — the
+      // one thing it must never be shown as is a draft.
+      return _note.score == null ? _notAnalysed() : _scalarOnly(context);
     }
 
     final chart = context.read<ChartController>();
@@ -107,7 +116,7 @@ class _TcwpnResultScreenState extends State<TcwpnResultScreen> {
             ),
             const SizedBox(height: Ds.s4),
           ],
-          SectionLabel('Decision'),
+          const SectionLabel('Decision'),
           _decisionPanel(r),
           const SizedBox(height: Ds.s5),
           SectionLabel(
@@ -115,14 +124,14 @@ class _TcwpnResultScreenState extends State<TcwpnResultScreen> {
           _attributionPanel(r),
           const SizedBox(height: Ds.s5),
           if (r.supportContributions.isNotEmpty) ...[
-            SectionLabel('Support set influence'),
+            const SectionLabel('Support set influence'),
             _supportInfluencePanel(r),
             const SizedBox(height: Ds.s5),
           ],
-          SectionLabel('Clinician review'),
+          const SectionLabel('Clinician review'),
           _verdictPanel(chart, r),
           const SizedBox(height: Ds.s5),
-          SectionLabel('Submitted note'),
+          const SectionLabel('Submitted note'),
           Panel(
             child: Text(
               _note.text,
@@ -131,7 +140,7 @@ class _TcwpnResultScreenState extends State<TcwpnResultScreen> {
             ),
           ),
           const SizedBox(height: Ds.s5),
-          SectionLabel('Model'),
+          const SectionLabel('Model'),
           _modelPanel(r),
           const SizedBox(height: Ds.s5),
           const DecisionSupportNotice(),
@@ -141,6 +150,189 @@ class _TcwpnResultScreenState extends State<TcwpnResultScreen> {
   }
 
   // ── Headline ──────────────────────────────────────────────────────────────
+
+  /// Never sent, or sent and not yet answered.
+  Widget _notAnalysed() => Scaffold(
+        appBar: AppBar(title: const Text('Clinical note')),
+        body: const EmptyState(
+          icon: Icons.pending_outlined,
+          title: 'Not analysed yet',
+          body: 'This note is saved as a draft. Analyse it to produce a score.',
+        ),
+      );
+
+  /// Scored by the clinical model, without the explanation payload.
+  ///
+  /// Everything here is a value the service actually returned. Nothing is
+  /// inferred: no attention weights, no prototype distances, no support
+  /// contributions, no entropy, no calibration error, no confidence. Where the
+  /// full result screen would show those, this screen says plainly that they
+  /// were not returned.
+  Widget _scalarOnly(BuildContext context) {
+    final chart = context.read<ChartController>();
+    final score = _note.score!;
+    final band = AlertBandX.fromScore(score);
+
+    return Scaffold(
+      appBar: AppBar(
+        title: const Text('Note analysis'),
+        actions: [
+          IconButton(
+            tooltip: 'Edit note',
+            icon: const Icon(Icons.edit_outlined),
+            onPressed: () => Navigator.pushReplacement(
+              context,
+              MaterialPageRoute(
+                builder: (_) => ChangeNotifierProvider.value(
+                  value: chart,
+                  child: NoteAnalysisScreen(existing: _note),
+                ),
+              ),
+            ),
+          ),
+        ],
+      ),
+      body: ListView(
+        padding: const EdgeInsets.fromLTRB(Ds.s4, Ds.s4, Ds.s4, Ds.s10),
+        children: [
+          Panel(
+            padding: const EdgeInsets.all(Ds.s5),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Row(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Readout(
+                      label: 'MODEL SCORE',
+                      value: score.toStringAsFixed(3),
+                      valueColor: band.fg,
+                    ),
+                    const Spacer(),
+                    BandChip(band: band, large: true),
+                  ],
+                ),
+                if (_note.analysedAt != null) ...[
+                  const SizedBox(height: Ds.s3),
+                  Text(
+                    'Analysed '
+                    '${DateFormat('d MMM y · HH:mm').format(_note.analysedAt!)}'
+                    '${_note.componentStatus == null ? '' : ' · status ${_note.componentStatus}'}',
+                    style: AppTheme.data(size: 11, color: Ds.inkFaint),
+                  ),
+                ],
+                if (_note.scoreProvenance != null) ...[
+                  const SizedBox(height: Ds.s2),
+                  Text(
+                    _note.scoreProvenance!,
+                    style: const TextStyle(
+                        fontSize: 12, color: Ds.inkMuted, height: 1.45),
+                  ),
+                ],
+              ],
+            ),
+          ),
+          if (_note.resultIsStale) ...[
+            const SizedBox(height: Ds.s4),
+            const InlineNotice(
+              icon: Icons.history_rounded,
+              tone: Ds.amber,
+              text:
+                  'This note has been edited since it was analysed. The score '
+                  'above describes the earlier text.',
+            ),
+          ],
+          const SizedBox(height: Ds.s5),
+          Text('FUSION', style: AppTheme.eyebrow),
+          const SizedBox(height: Ds.s2),
+          _fusionSummary(widget.ingest, chart),
+          const SizedBox(height: Ds.s5),
+          const InlineNotice(
+            icon: Icons.info_outline_rounded,
+            text: 'Detailed model interpretation is not available from the '
+                'current clinical service response. Attention spans, support '
+                'contributions, prototype distances and calibration figures '
+                'were not returned for this note.',
+          ),
+        ],
+      ),
+    );
+  }
+
+  /// Fusion as the SERVER reported it. Nothing is computed here.
+  Widget _fusionSummary(
+      ClinicalNoteIngestResult? ingest, ChartController chart) {
+    if (ingest != null && ingest.hasFusionSummary) {
+      final composite = ingest.fusionComposite;
+      return Panel(
+        padding: const EdgeInsets.all(Ds.s4),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Row(
+              children: [
+                Readout(
+                  label: 'COMPOSITE',
+                  value: composite == null ? '—' : composite.toStringAsFixed(3),
+                ),
+                const SizedBox(width: Ds.s6),
+                if (ingest.fusionTier != null)
+                  Readout(label: 'TIER', value: ingest.fusionTier!),
+                const Spacer(),
+                if (ingest.fusionBand != null)
+                  BandChip(band: AlertBandX.fromWire(ingest.fusionBand!)),
+              ],
+            ),
+            if (ingest.fusionReason != null) ...[
+              const SizedBox(height: Ds.s3),
+              Text(ingest.fusionReason!,
+                  style: const TextStyle(
+                      fontSize: 12, color: Ds.inkMuted, height: 1.45)),
+            ],
+          ],
+        ),
+      );
+    }
+
+    if (ingest != null && ingest.fusionError != null) {
+      return InlineNotice(
+        icon: Icons.error_outline_rounded,
+        tone: Ds.amber,
+        text: 'The note was scored and stored, but fusion did not complete: '
+            '${ingest.fusionError}',
+      );
+    }
+
+    if (ingest != null && ingest.fusionSkippedReason != null) {
+      return InlineNotice(
+        icon: Icons.pause_circle_outline_rounded,
+        text: 'Fusion was skipped for this submission: '
+            '${ingest.fusionSkippedReason}',
+      );
+    }
+
+    final f = chart.fusion;
+    if (f != null && f.hasComposite) {
+      return Panel(
+        padding: const EdgeInsets.all(Ds.s4),
+        child: Row(
+          children: [
+            Readout(
+              label: 'LATEST COMPOSITE',
+              value: f.compositeScore!.toStringAsFixed(3),
+            ),
+            const Spacer(),
+            BandChip(band: f.band),
+          ],
+        ),
+      );
+    }
+
+    return const InlineNotice(
+      icon: Icons.remove_circle_outline_rounded,
+      text: 'No fusion result has been reported for this patient yet.',
+    );
+  }
 
   Widget _headline(TcwpnResult r, AlertBand band) => Panel(
         padding: const EdgeInsets.all(Ds.s5),
