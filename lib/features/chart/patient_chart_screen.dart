@@ -537,14 +537,26 @@ class _NoteTile extends StatelessWidget {
         children: [
           SizedBox(
             width: 44,
+            // A scored note shows its score whether or not the explanation
+            // payload came back. Showing an em-dash for a note the model
+            // actually scored reads as "no assessment", which is false.
             child: Text(
-              r == null ? '—' : r.calibratedProbability.toStringAsFixed(2),
+              r != null
+                  ? r.calibratedProbability.toStringAsFixed(2)
+                  : (note.score == null ? '—' : note.score!.toStringAsFixed(2)),
               style: AppTheme.data(
                 size: 15,
                 weight: FontWeight.w600,
-                color: r == null
+                color: !note.hasBeenAnalysed
                     ? Ds.inkFaint
-                    : (r.isPositive ? Ds.red : Ds.green),
+                    : ((r != null
+                            ? r.isPositive
+                            : AlertBandX.fromScore(note.score!) ==
+                                    AlertBand.red ||
+                                AlertBandX.fromScore(note.score!) ==
+                                    AlertBand.darkRed)
+                        ? Ds.red
+                        : Ds.green),
               ),
             ),
           ),
@@ -582,7 +594,7 @@ class _NoteTile extends StatelessWidget {
               ],
             ),
           ),
-          if (r == null)
+          if (!note.hasBeenAnalysed)
             Container(
               padding:
                   const EdgeInsets.symmetric(horizontal: Ds.s3, vertical: 3),
@@ -590,11 +602,14 @@ class _NoteTile extends StatelessWidget {
                 color: Ds.surfaceSunken,
                 borderRadius: BorderRadius.circular(Ds.rPill),
               ),
-              child: const Text('Draft',
-                  style: TextStyle(fontSize: 11, color: Ds.inkMuted)),
+              child: Text(note.analysisFailed ? 'Not scored' : 'Draft',
+                  style: const TextStyle(fontSize: 11, color: Ds.inkMuted)),
             )
           else
-            BandChip(band: AlertBandX.fromScore(r.calibratedProbability)),
+            BandChip(
+              band:
+                  AlertBandX.fromScore(r?.calibratedProbability ?? note.score!),
+            ),
         ],
       ),
     );
