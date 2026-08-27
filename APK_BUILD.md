@@ -44,12 +44,20 @@ dart run flutter_launcher_icons
 ```
 
 ```bash
+Write-Host "BACKEND_BASE: $env:BACKEND_BASE" \
+Write-Host "BACKEND_TOKEN: $env:BACKEND_TOKEN" \
+Write-Host "TCWPN_BASE: $env:TCWPN_BASE" \
+Write-Host "AUTH_SALT: $env:AUTH_SALT" \
+Write-Host "AUTH_LOCAL: $env:AUTH_LOCAL" \ 
+```
+
+```bash
 flutter build apk --debug `
   --dart-define=BACKEND_BASE=$env:BACKEND_BASE `
   --dart-define=BACKEND_TOKEN=$env:BACKEND_TOKEN `
   --dart-define=TCWPN_BASE=$env:TCWPN_BASE `
   --dart-define=DEMO_DATA=false `
-  --dart-define=AUTH_SALT=$ENV:AUTH_SALT `
+  --dart-define=AUTH_SALT=$env:AUTH_SALT `
   --dart-define=AUTH_LOCAL=$env:AUTH_LOCAL`
 ```
 
@@ -64,12 +72,20 @@ flutter build apk --debug `
 ```
 
 ```bash
+Write-Host "BACKEND_BASE: $env:BACKEND_BASE" \
+Write-Host "BACKEND_TOKEN: $env:BACKEND_TOKEN" \
+Write-Host "TCWPN_BASE: $env:TCWPN_BASE" \
+Write-Host "AUTH_SALT: $env:AUTH_SALT" \
+Write-Host "AUTH_LOCAL: $env:AUTH_LOCAL" \ 
+```
+
+```bash
 flutter build apk --release `
   --dart-define=BACKEND_BASE=$env:BACKEND_BASE `
   --dart-define=BACKEND_TOKEN=$env:BACKEND_TOKEN `
   --dart-define=TCWPN_BASE=$env:TCWPN_BASE `
   --dart-define=DEMO_DATA=false `
-  --dart-define=AUTH_SALT=r26-ds012-local-salt `
+  --dart-define=AUTH_SALT=$env:AUTH_SALT `
   --dart-define=AUTH_LOCAL=$env:AUTH_LOCAL`
 ```
 
