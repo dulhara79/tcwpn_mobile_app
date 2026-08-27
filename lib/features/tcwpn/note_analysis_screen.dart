@@ -248,7 +248,7 @@ class _NoteAnalysisScreenState extends State<NoteAnalysisScreen> {
         MaterialPageRoute(
           builder: (_) => ChangeNotifierProvider.value(
             value: chart,
-            child: TcwpnResultScreen(note: note),
+            child: TcwpnResultScreen(note: note, ingest: chart.lastIngest),
           ),
         ),
       );
