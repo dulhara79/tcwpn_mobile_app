@@ -438,6 +438,15 @@ class ClinicalNoteIngestResult {
   final bool fusionTriggered;
   final int? fusionResultId;
 
+  /// The fusion summary the backend returns inline with the ingest, from the
+  /// response's `fusion` object. These are the SERVER's numbers, read as sent —
+  /// the app never recomputes a composite. All null when fusion did not run,
+  /// in which case [fusionError] or [fusionSkippedReason] says why.
+  final double? fusionComposite;
+  final String? fusionTier;
+  final String? fusionBand;
+  final String? fusionReason;
+
   /// Set when fusion ran but failed. The note is still stored — the backend
   /// never lets a fusion failure fail the ingest.
   final String? fusionError;
@@ -454,11 +463,22 @@ class ClinicalNoteIngestResult {
     this.result,
     this.fusionTriggered = false,
     this.fusionResultId,
+    this.fusionComposite,
+    this.fusionTier,
+    this.fusionBand,
+    this.fusionReason,
     this.fusionError,
     this.fusionSkippedReason,
   });
 
   bool get scored => status == 'ok' && score != null;
+
+  /// True when the backend returned the model's full explanation payload. When
+  /// false the note may still be scored — the scalar arrives either way.
+  bool get hasRichDetail => result != null;
+
+  /// True when fusion ran and reported a composite alongside this ingest.
+  bool get hasFusionSummary => fusionComposite != null || fusionBand != null;
 
   /// True when the model ran but had no prototypes to compare against. Worth
   /// distinguishing in the UI: the fix is clinician action (label some support
@@ -492,6 +512,11 @@ class ClinicalNoteIngestResult {
               ? null
               : _i(fusion['fusion_result_id']))
           : _i(j['fusion_result_id']),
+      fusionComposite:
+          fusion['composite'] == null ? null : _d(fusion['composite']),
+      fusionTier: fusion['tier'] == null ? null : _s(fusion['tier']),
+      fusionBand: fusion['band'] == null ? null : _s(fusion['band']),
+      fusionReason: fusion['reason'] == null ? null : _s(fusion['reason']),
       fusionError: j['fusion_error'] == null ? null : _s(j['fusion_error']),
       fusionSkippedReason: j['fusion_skipped_reason'] == null
           ? null
@@ -613,6 +638,28 @@ class ClinicalNote {
   final String noteType;
   final String clinicianId;
   final TcwpnResult? result;
+
+  /// The scalar modality score the backend stored for this note, straight from
+  /// the ingest response's `score`.
+  ///
+  /// WHY THIS IS SEPARATE FROM [result]
+  /// ----------------------------------
+  /// POST /v1/clinical-notes returns `subject_id`, `reading_id`, `status`,
+  /// `score`, `note` and a fusion summary. It does NOT return the model's full
+  /// explanation payload — that is written to the backend's own
+  /// `ModalityReading.detail` and egressed by no route. So a note can be
+  /// genuinely analysed and scored while [result] is null, and treating a null
+  /// [result] as "not analysed" mislabels a completed assessment as a draft.
+  final double? score;
+
+  /// The component's status verbatim: `ok` · `no_support_set` · `error`.
+  /// Kept unmapped so an unrecognised value is shown, not swallowed.
+  final String? componentStatus;
+
+  /// The backend's own note on this reading — which score field it used and how
+  /// confidence was derived. Displayed rather than asserted.
+  final String? scoreProvenance;
+
   final String? clinicianComment;
 
   /// Explicit lifecycle state. See [ClinicalNoteStatus].
@@ -638,6 +685,9 @@ class ClinicalNote {
     required this.clinicianId,
     this.updatedAt,
     this.result,
+    this.score,
+    this.componentStatus,
+    this.scoreProvenance,
     this.clinicianComment,
     this.clinicianVerdict,
     this.status = ClinicalNoteStatus.draft,
@@ -647,17 +697,26 @@ class ClinicalNote {
 
   bool get isDraft => status == ClinicalNoteStatus.draft;
   bool get isAnalysed =>
-      status == ClinicalNoteStatus.analysed && result != null;
+      status == ClinicalNoteStatus.analysed && hasBeenAnalysed;
   bool get analysisFailed => status == ClinicalNoteStatus.analysisFailed;
 
+  /// The model's full explanation payload is present, so every panel on the
+  /// result screen can be rendered from real numbers.
+  bool get hasRichResult => result != null;
+
+  /// Scored, but without the explanation payload. A real assessment that the
+  /// UI must render in reduced form rather than as an empty state.
+  bool get hasScalarResultOnly => result == null && score != null;
+
   /// True when this note has been analysed before, so the action is
-  /// "Re-analyse" rather than "Analyse".
-  bool get hasBeenAnalysed => result != null;
+  /// "Re-analyse" rather than "Analyse". A scalar score counts: the note WAS
+  /// sent, scored and stored server-side.
+  bool get hasBeenAnalysed => result != null || score != null;
 
   /// True when the text has changed since the assessment on screen was produced,
   /// which makes that assessment stale relative to what the clinician is reading.
   bool get resultIsStale =>
-      result != null &&
+      hasBeenAnalysed &&
       analysedAt != null &&
       updatedAt != null &&
       updatedAt!.isAfter(analysedAt!);
@@ -672,30 +731,50 @@ class ClinicalNote {
     DateTime? updatedAt,
     TcwpnResult? result,
     bool clearResult = false,
+    double? score,
+    String? componentStatus,
+    String? scoreProvenance,
+    bool clearScore = false,
     String? clinicianComment,
     String? clinicianVerdict,
     ClinicalNoteStatus? status,
     String? lastAnalysisError,
     bool clearAnalysisError = false,
     DateTime? analysedAt,
-  }) =>
-      ClinicalNote(
-        id: id,
-        patientMrn: patientMrn,
-        recordedAt: recordedAt,
-        updatedAt: updatedAt ?? this.updatedAt,
-        text: text ?? this.text,
-        noteType: noteType ?? this.noteType,
-        clinicianId: clinicianId,
-        result: clearResult ? null : (result ?? this.result),
-        clinicianComment: clinicianComment ?? this.clinicianComment,
-        clinicianVerdict: clinicianVerdict ?? this.clinicianVerdict,
-        status: status ?? this.status,
-        lastAnalysisError: clearAnalysisError
-            ? null
-            : (lastAnalysisError ?? this.lastAnalysisError),
-        analysedAt: clearResult ? null : (analysedAt ?? this.analysedAt),
-      );
+  }) {
+    // The two halves of an assessment are cleared independently, because a
+    // re-analysis can legitimately return a score without the explanation
+    // payload. Carrying the PREVIOUS run's rich result forward next to this
+    // run's score would attribute one analysis's attention weights to another.
+    final nextResult = clearResult ? null : (result ?? this.result);
+    final nextScore = clearScore ? null : (score ?? this.score);
+
+    return ClinicalNote(
+      id: id,
+      patientMrn: patientMrn,
+      recordedAt: recordedAt,
+      updatedAt: updatedAt ?? this.updatedAt,
+      text: text ?? this.text,
+      noteType: noteType ?? this.noteType,
+      clinicianId: clinicianId,
+      result: nextResult,
+      score: nextScore,
+      componentStatus:
+          clearScore ? null : (componentStatus ?? this.componentStatus),
+      scoreProvenance:
+          clearScore ? null : (scoreProvenance ?? this.scoreProvenance),
+      clinicianComment: clinicianComment ?? this.clinicianComment,
+      clinicianVerdict: clinicianVerdict ?? this.clinicianVerdict,
+      status: status ?? this.status,
+      lastAnalysisError: clearAnalysisError
+          ? null
+          : (lastAnalysisError ?? this.lastAnalysisError),
+      // Only meaningless once NEITHER half of the assessment remains.
+      analysedAt: (nextResult == null && nextScore == null)
+          ? null
+          : (analysedAt ?? this.analysedAt),
+    );
+  }
 
   Map<String, dynamic> toJson() => {
         'id': id,
@@ -706,6 +785,9 @@ class ClinicalNote {
         'note_type': noteType,
         'clinician_id': clinicianId,
         'result': result?.toJson(),
+        'score': score,
+        'component_status': componentStatus,
+        'score_provenance': scoreProvenance,
         'clinician_comment': clinicianComment,
         'clinician_verdict': clinicianVerdict,
         'status': status.name,
@@ -725,8 +807,9 @@ class ClinicalNote {
       'analysed' => ClinicalNoteStatus.analysed,
       'analysisFailed' => ClinicalNoteStatus.analysisFailed,
       'draft' => ClinicalNoteStatus.draft,
-      _ =>
-        result != null ? ClinicalNoteStatus.analysed : ClinicalNoteStatus.draft,
+      _ => (result != null || j['score'] != null)
+          ? ClinicalNoteStatus.analysed
+          : ClinicalNoteStatus.draft,
     };
 
     return ClinicalNote(
@@ -738,6 +821,11 @@ class ClinicalNote {
       noteType: _s(j['note_type'] ?? j['noteType'], 'Psychiatry note'),
       clinicianId: _s(j['clinician_id'] ?? j['clinicianId']),
       result: result,
+      score: j['score'] == null ? null : _d(j['score']),
+      componentStatus:
+          j['component_status'] == null ? null : _s(j['component_status']),
+      scoreProvenance:
+          j['score_provenance'] == null ? null : _s(j['score_provenance']),
       clinicianComment:
           j['clinician_comment'] == null ? null : _s(j['clinician_comment']),
       clinicianVerdict:
