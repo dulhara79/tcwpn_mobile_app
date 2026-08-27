@@ -259,9 +259,15 @@ class ChartController extends ChangeNotifier {
     notifyListeners();
   }
 
+  /// The most recent note that actually carries an assessment.
+  ///
+  /// A scalar score counts. The explanation payload is optional in the ingest
+  /// response, so requiring [ClinicalNote.result] here would hide a scored note
+  /// from every caller. Callers that need the rich fields still check for them
+  /// individually — see fusion_detail_screen.
   ClinicalNote? get latestAnalysedNote {
     for (final n in _notes) {
-      if (n.result != null) return n;
+      if (n.hasBeenAnalysed) return n;
     }
     return null;
   }
@@ -630,27 +636,44 @@ class ChartController extends ChangeNotifier {
 
       _lastIngest = ingest;
 
-      // `result` stays null when the component returned no detail. That renders
-      // as "no assessment available", which is the truth — it must never render
-      // as a model that looked and found nothing.
+      // WHETHER THE NOTE WAS ANALYSED IS THE BACKEND'S STATEMENT, NOT A SIDE
+      // EFFECT OF WHICH FIELDS IT CHOSE TO SERIALISE.
+      //
+      // POST /v1/clinical-notes returns `status` and `score` on every scored
+      // note, but returns the model's explanation payload only when the service
+      // is configured to include it. Keying success off `ingest.result != null`
+      // therefore marked every scored note `analysisFailed` and rendered a
+      // completed assessment as an unanalysed draft. `ingest.scored` is the
+      // backend's own verdict — `status == 'ok' && score != null` — and it is
+      // what decides the lifecycle state here.
+      //
+      // The rich result is still carried when present, and still cleared when
+      // absent, so a re-analysis never shows the previous run's attention
+      // weights beside this run's score.
+      final scored = ingest.scored;
       final analysed = note.copyWith(
         result: ingest.result,
         clearResult: ingest.result == null,
+        score: ingest.score,
+        clearScore: ingest.score == null,
+        componentStatus: ingest.status,
+        scoreProvenance: ingest.scoreProvenance,
         analysedAt: DateTime.now(),
-        status: ingest.result == null
-            ? ClinicalNoteStatus.analysisFailed
-            : ClinicalNoteStatus.analysed,
-        clearAnalysisError: ingest.result != null,
-        lastAnalysisError: ingest.result == null
-            ? 'The note was submitted, but no assessment was returned.'
-            : null,
+        status: scored
+            ? ClinicalNoteStatus.analysed
+            : ClinicalNoteStatus.analysisFailed,
+        clearAnalysisError: scored,
+        lastAnalysisError: scored
+            ? null
+            : 'The note was submitted and stored, but the clinical model '
+                'returned no usable score.',
       );
       _notes = _notes.map((n) => n.id == noteId ? analysed : n).toList();
       await RecordStore.saveNotes(mrn, _notes);
 
       // Carry the component's own explanation of a non-ok status through to the
       // UI rather than reporting a generic failure.
-      if (!ingest.scored) {
+      if (!scored) {
         _error = ingest.needsSupportSet
             ? 'The note was stored, but no labelled examples exist for this '
                 'patient, so no comparison could be made. Add labelled notes to '
