@@ -32,7 +32,7 @@ class RosterController extends ChangeNotifier {
   List<Patient> _patients = [];
   List<ClinicalAlert> _alerts = [];
   List<SupportNote> _siteSupport = [];
-  Map<String, FusionResult> _latestFusion = {};
+  final Map<String, FusionResult> _latestFusion = {};
   bool _loading = true;
   Map<String, dynamic>? _modelInfo;
   Map<String, dynamic>? _backendInfo;
@@ -482,8 +482,9 @@ class ChartController extends ChangeNotifier {
     // A blocked fusion is GREY and has no composite. It is not an escalation,
     // and it must not be silently treated as one in either direction.
     if (!result.hasComposite) return;
-    if (result.band != AlertBand.red && result.band != AlertBand.darkRed)
+    if (result.band != AlertBand.red && result.band != AlertBand.darkRed) {
       return;
+    }
 
     await roster.raiseAlert(ClinicalAlert(
       id: _uuid.v4(),

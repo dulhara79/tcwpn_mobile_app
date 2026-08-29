@@ -32,7 +32,6 @@ import '../../core/config/env.dart';
 import '../../domain/models.dart';
 import '../../domain/evidence.dart';
 import 'api_client.dart';
-import 'session.dart';
 
 // ─────────────────────────────────────────────────────────────────────────────
 // Central Backend
