@@ -78,6 +78,11 @@ class _AppShellState extends State<AppShell> {
             selectedIcon: Icon(Icons.tune_rounded),
             label: 'Settings',
           ),
+          const NavigationDestination(
+            icon: Icon(Icons.psychology_outlined),
+            selectedIcon: Icon(Icons.psychology),
+            label: 'Ask CARE',
+          ),
         ],
       ),
     );
