@@ -13,5 +13,6 @@ jobs:
         with:
           channel: stable
           cache: true
+      - run: cp lib/core/config/env.example.dart lib/core/config/env.dart
       - run: flutter pub get
       - run: flutter test
