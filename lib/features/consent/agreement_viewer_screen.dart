@@ -15,8 +15,8 @@ import 'package:intl/intl.dart';
 import '../../core/design/components.dart';
 import '../../core/design/theme.dart';
 import '../../core/design/tokens.dart';
+import '../../data/api/session.dart';
 import '../../data/local/consent_store.dart';
-import '../../data/local/stores.dart';
 import '../../domain/consent.dart';
 import '../auth/login_screen.dart';
 import 'agreement_text.dart';
@@ -281,7 +281,7 @@ class _ReceiptTabState extends State<_ReceiptTab> {
     if (ok != true || !context.mounted) return;
 
     await ConsentStore.withdraw();
-    await SecureStore.signOut();
+    await Session.signOut();
     if (!context.mounted) return;
     Navigator.pushAndRemoveUntil(
       context,
