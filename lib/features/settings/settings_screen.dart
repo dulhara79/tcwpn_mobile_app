@@ -207,8 +207,7 @@ class SettingsScreen extends StatelessWidget {
       ),
     );
     if (ok != true || !context.mounted) return;
-    await SecureStore.signOut();
-    Session.clear();
+    await Session.signOut();
     if (!context.mounted) return;
     Navigator.pushAndRemoveUntil(
       context,
