@@ -14,4 +14,4 @@ jobs:
           channel: stable
           cache: true
       - run: flutter pub get
-      - run: flutter test test/session_sign_out_test.dart
+      - run: flutter test
