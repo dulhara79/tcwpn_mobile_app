@@ -20,10 +20,6 @@ import '../../domain/models.dart';
 import '../../state/controllers.dart';
 import '../shell.dart' show PatientRow, openChart;
 
-// -----------------------------------------------------------------------------
-// Clinical dashboard data
-// -----------------------------------------------------------------------------
-
 enum Trajectory { improving, worsening, steady, insufficient }
 
 extension TrajectoryX on Trajectory {
@@ -54,9 +50,7 @@ const double kTrajectoryDeadband = 0.02;
 class ClinicalDashboardAssessment {
   final double score;
   final DateTime at;
-
   const ClinicalDashboardAssessment({required this.score, required this.at});
-
   AlertBand get band => AlertBandX.fromScore(score);
 }
 
@@ -136,16 +130,15 @@ class ClinicalDashboardStats {
     var sum = 0.0;
 
     for (final mrn in patientMrns) {
-      final summary = summaries[mrn] ?? ClinicalDashboardPatient(patientMrn: mrn);
+      final summary =
+          summaries[mrn] ?? ClinicalDashboardPatient(patientMrn: mrn);
       final score = summary.latestScore;
       final band = summary.latestBand;
       if (score == null || band == null) continue;
-
       scored++;
       sum += score;
       bands[band] = (bands[band] ?? 0) + 1;
       if (band == AlertBand.red || band == AlertBand.darkRed) review++;
-
       final t = summary.trajectory;
       if (t != null) trajectories[t] = (trajectories[t] ?? 0) + 1;
     }
@@ -178,10 +171,6 @@ class ClinicalDashboardStats {
   int trajectoryCount(Trajectory t) => trajectoryCounts[t] ?? 0;
 }
 
-// -----------------------------------------------------------------------------
-// Screen
-// -----------------------------------------------------------------------------
-
 class KpiDashboardScreen extends StatefulWidget {
   const KpiDashboardScreen({super.key});
 
@@ -197,10 +186,10 @@ class _KpiDashboardScreenState extends State<KpiDashboardScreen> {
   @override
   void initState() {
     super.initState();
-    // IndexedStack keeps this tab alive. Polling only local SharedPreferences
-    // lets a newly analysed note update this dashboard even when fusion refresh
-    // fails and RosterController therefore emits no fusion notification.
-    _timer = Timer.periodic(const Duration(seconds: 2), (_) => _reload(silent: true));
+    _timer = Timer.periodic(
+      const Duration(seconds: 2),
+      (_) => _reload(silent: true),
+    );
   }
 
   @override
@@ -249,7 +238,8 @@ class _KpiDashboardScreenState extends State<KpiDashboardScreen> {
               ? const EmptyState(
                   icon: Icons.insights_rounded,
                   title: 'No patients yet',
-                  body: 'Add a patient and analyse a clinical note to populate the dashboard.',
+                  body:
+                      'Add a patient and analyse a clinical note to populate the dashboard.',
                 )
               : _body(context, roster, stats ?? _empty(roster)),
     );
@@ -273,9 +263,10 @@ class _KpiDashboardScreenState extends State<KpiDashboardScreen> {
         padding: const EdgeInsets.fromLTRB(Ds.s4, Ds.s3, Ds.s4, Ds.s10),
         children: [
           const InlineNotice(
-            icon: Icons.clinical_notes_outlined,
+            icon: Icons.description_outlined,
             tone: Ds.brand,
-            text: 'This dashboard currently summarises clinical-note assessments. '
+            text:
+                'This dashboard currently summarises clinical-note assessments. '
                 'It does not label these values as fusion or multimodal risk.',
           ),
           const SizedBox(height: Ds.s5),
@@ -289,7 +280,9 @@ class _KpiDashboardScreenState extends State<KpiDashboardScreen> {
           _trajectory(stats),
           const SizedBox(height: Ds.s6),
           const SectionLabel('Patients'),
-          ...roster.patients.map((p) => _patientCard(context, roster, p, stats)),
+          ...roster.patients.map(
+            (p) => _patientCard(context, roster, p, stats),
+          ),
           const SizedBox(height: Ds.s4),
           const DecisionSupportNotice(),
         ],
@@ -298,7 +291,8 @@ class _KpiDashboardScreenState extends State<KpiDashboardScreen> {
   }
 
   Widget _overview(ClinicalDashboardStats s) {
-    final mean = s.meanRisk == null ? '—' : '${(s.meanRisk! * 100).toStringAsFixed(1)}%';
+    final mean =
+        s.meanRisk == null ? '—' : '${(s.meanRisk! * 100).toStringAsFixed(1)}%';
     return LayoutBuilder(
       builder: (context, c) {
         final width = (c.maxWidth - Ds.s3) / 2;
@@ -306,21 +300,31 @@ class _KpiDashboardScreenState extends State<KpiDashboardScreen> {
           spacing: Ds.s3,
           runSpacing: Ds.s3,
           children: [
-            _tile(width, 'Active patients', '${s.total}', Icons.groups_2_outlined, Ds.brand,
-                'on this device'),
-            _tile(width, 'Needs review', '${s.needsReview}', Icons.priority_high_rounded, Ds.red,
+            _tile(width, 'Active patients', '${s.total}',
+                Icons.groups_2_outlined, Ds.brand, 'on this device'),
+            _tile(width, 'Needs review', '${s.needsReview}',
+                Icons.priority_high_rounded, Ds.red,
                 'latest note is high / very high'),
-            _tile(width, 'Mean clinical risk', mean, Icons.monitor_heart_outlined, Ds.brand,
+            _tile(width, 'Mean clinical risk', mean,
+                Icons.monitor_heart_outlined, Ds.brand,
                 'over ${s.scoredCount} assessed patients'),
             _tile(width, 'Awaiting assessment', '${s.awaitingAssessment}',
-                Icons.pending_actions_outlined, Ds.grey, 'no current analysed note'),
+                Icons.pending_actions_outlined, Ds.grey,
+                'no current analysed note'),
           ],
         );
       },
     );
   }
 
-  Widget _tile(double width, String label, String value, IconData icon, Color tone, String caption) {
+  Widget _tile(
+    double width,
+    String label,
+    String value,
+    IconData icon,
+    Color tone,
+    String caption,
+  ) {
     return SizedBox(
       width: width,
       child: Panel(
@@ -330,11 +334,18 @@ class _KpiDashboardScreenState extends State<KpiDashboardScreen> {
           children: [
             Icon(icon, size: 19, color: tone),
             const SizedBox(height: Ds.s3),
-            Text(value, style: AppTheme.data(size: 24, weight: FontWeight.w700, color: Ds.ink)),
+            Text(value,
+                style: AppTheme.data(
+                    size: 24, weight: FontWeight.w700, color: Ds.ink)),
             const SizedBox(height: 2),
-            Text(label, style: const TextStyle(fontSize: 12.5, fontWeight: FontWeight.w600, color: Ds.ink)),
+            Text(label,
+                style: const TextStyle(
+                    fontSize: 12.5,
+                    fontWeight: FontWeight.w600,
+                    color: Ds.ink)),
             const SizedBox(height: 2),
-            Text(caption, style: const TextStyle(fontSize: 10.5, color: Ds.inkFaint)),
+            Text(caption,
+                style: const TextStyle(fontSize: 10.5, color: Ds.inkFaint)),
           ],
         ),
       ),
@@ -346,12 +357,18 @@ class _KpiDashboardScreenState extends State<KpiDashboardScreen> {
       return Panel(
         child: Text(
           '${s.total} active patients are on this device, but none has a current analysed clinical note yet.',
-          style: const TextStyle(fontSize: 13, color: Ds.inkMuted, height: 1.45),
+          style: const TextStyle(
+              fontSize: 13, color: Ds.inkMuted, height: 1.45),
         ),
       );
     }
 
-    const bands = [AlertBand.green, AlertBand.amber, AlertBand.red, AlertBand.darkRed];
+    const bands = [
+      AlertBand.green,
+      AlertBand.amber,
+      AlertBand.red,
+      AlertBand.darkRed,
+    ];
     return Panel(
       child: Column(
         children: [
@@ -368,10 +385,12 @@ class _KpiDashboardScreenState extends State<KpiDashboardScreen> {
             const Divider(color: Ds.hairline, height: Ds.s6),
             Row(
               children: [
-                const Icon(Icons.help_outline_rounded, size: 17, color: Ds.grey),
+                const Icon(Icons.help_outline_rounded,
+                    size: 17, color: Ds.grey),
                 const SizedBox(width: Ds.s2),
                 Text('${s.awaitingAssessment} awaiting assessment',
-                    style: const TextStyle(fontSize: 12, color: Ds.inkMuted)),
+                    style: const TextStyle(
+                        fontSize: 12, color: Ds.inkMuted)),
               ],
             ),
           ],
@@ -392,8 +411,13 @@ class _KpiDashboardScreenState extends State<KpiDashboardScreen> {
       children: [
         Row(
           children: [
-            Expanded(child: Text(label, style: const TextStyle(fontSize: 13, fontWeight: FontWeight.w600))),
-            Text('$count', style: AppTheme.data(size: 13, weight: FontWeight.w700)),
+            Expanded(
+              child: Text(label,
+                  style: const TextStyle(
+                      fontSize: 13, fontWeight: FontWeight.w600)),
+            ),
+            Text('$count',
+                style: AppTheme.data(size: 13, weight: FontWeight.w700)),
           ],
         ),
         const SizedBox(height: Ds.s2),
@@ -413,8 +437,10 @@ class _KpiDashboardScreenState extends State<KpiDashboardScreen> {
   Widget _trajectory(ClinicalDashboardStats s) {
     if (s.scoredCount == 0) {
       return const Panel(
-        child: Text('Analyse a clinical note to begin tracking direction of travel.',
-            style: TextStyle(fontSize: 13, color: Ds.inkMuted)),
+        child: Text(
+          'Analyse a clinical note to begin tracking direction of travel.',
+          style: TextStyle(fontSize: 13, color: Ds.inkMuted),
+        ),
       );
     }
 
@@ -426,8 +452,16 @@ class _KpiDashboardScreenState extends State<KpiDashboardScreen> {
           runSpacing: Ds.s3,
           children: [
             for (final t in Trajectory.values)
-              _tile(width, t.label, '${s.trajectoryCount(t)}', t.icon, t.tone,
-                  t == Trajectory.insufficient ? 'needs a second analysed note' : 'latest versus previous note'),
+              _tile(
+                width,
+                t.label,
+                '${s.trajectoryCount(t)}',
+                t.icon,
+                t.tone,
+                t == Trajectory.insufficient
+                    ? 'needs a second analysed note'
+                    : 'latest versus previous note',
+              ),
           ],
         );
       },
@@ -460,8 +494,13 @@ class _KpiDashboardScreenState extends State<KpiDashboardScreen> {
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
-                      Text(patient.name,
-                          style: const TextStyle(fontSize: 14, fontWeight: FontWeight.w700, color: Ds.ink)),
+                      Text(
+                        patient.name,
+                        style: const TextStyle(
+                            fontSize: 14,
+                            fontWeight: FontWeight.w700,
+                            color: Ds.ink),
+                      ),
                       const SizedBox(height: 3),
                       Text(patient.mrn,
                           style: AppTheme.data(size: 11, color: Ds.inkFaint)),
@@ -469,24 +508,43 @@ class _KpiDashboardScreenState extends State<KpiDashboardScreen> {
                   ),
                 ),
                 if (score == null || band == null)
-                  const Text('Awaiting assessment',
-                      style: TextStyle(fontSize: 11.5, color: Ds.grey, fontWeight: FontWeight.w600))
+                  const Text(
+                    'Awaiting assessment',
+                    style: TextStyle(
+                        fontSize: 11.5,
+                        color: Ds.grey,
+                        fontWeight: FontWeight.w600),
+                  )
                 else
                   Column(
                     crossAxisAlignment: CrossAxisAlignment.end,
                     children: [
-                      Text('${(score * 100).toStringAsFixed(1)}%',
-                          style: AppTheme.data(size: 16, weight: FontWeight.w700, color: band.fg)),
-                      Text(band.severityLabel,
-                          style: TextStyle(fontSize: 11, fontWeight: FontWeight.w700, color: band.fg)),
+                      Text(
+                        '${(score * 100).toStringAsFixed(1)}%',
+                        style: AppTheme.data(
+                            size: 16,
+                            weight: FontWeight.w700,
+                            color: band.fg),
+                      ),
+                      Text(
+                        band.severityLabel,
+                        style: TextStyle(
+                            fontSize: 11,
+                            fontWeight: FontWeight.w700,
+                            color: band.fg),
+                      ),
                       if (trajectory != null)
                         Row(
                           mainAxisSize: MainAxisSize.min,
                           children: [
-                            Icon(trajectory.icon, size: 13, color: trajectory.tone),
+                            Icon(trajectory.icon,
+                                size: 13, color: trajectory.tone),
                             const SizedBox(width: 2),
-                            Text(trajectory.label,
-                                style: TextStyle(fontSize: 10.5, color: trajectory.tone)),
+                            Text(
+                              trajectory.label,
+                              style: TextStyle(
+                                  fontSize: 10.5, color: trajectory.tone),
+                            ),
                           ],
                         ),
                     ],
