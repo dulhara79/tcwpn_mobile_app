@@ -648,9 +648,24 @@ class ChartController extends ChangeNotifier {
 
       _lastIngest = ingest;
 
-      // `result` stays null when the component returned no detail. That renders
-      // as "no assessment available", which is the truth — it must never render
-      // as a model that looked and found nothing.
+      // The component's own explanation of a non-ok status, built BEFORE the
+      // note is written so it can be stored on the note rather than only in the
+      // controller. `_error` is transient — it is cleared by the next action and
+      // is gone entirely by the time a clinician reopens the note from the
+      // chart — so writing only the generic line to `lastAnalysisError` threw
+      // away the one piece of information that says what to do next: a cold
+      // Space, an unusable support bank and a missing score field all rendered
+      // as the same sentence.
+      final String? failureReason = ingest.result != null
+          ? null
+          : ingest.needsSupportSet
+              ? 'The note was stored, but no labelled examples exist for this '
+                  'patient, so no comparison could be made. Add labelled notes '
+                  'to enable analysis.'
+              : 'The note was stored, but the clinical model did not return a '
+                  'usable score (${ingest.status})'
+                  '${ingest.scoreProvenance == null ? '' : ': ${ingest.scoreProvenance}'}.';
+
       final analysed = note.copyWith(
         result: ingest.result,
         clearResult: ingest.result == null,
@@ -659,23 +674,13 @@ class ChartController extends ChangeNotifier {
             ? ClinicalNoteStatus.analysisFailed
             : ClinicalNoteStatus.analysed,
         clearAnalysisError: ingest.result != null,
-        lastAnalysisError: ingest.result == null
-            ? 'The note was submitted, but no assessment was returned.'
-            : null,
+        lastAnalysisError: failureReason,
       );
       _notes = _notes.map((n) => n.id == noteId ? analysed : n).toList();
       await RecordStore.saveNotes(mrn, _notes);
 
-      // Carry the component's own explanation of a non-ok status through to the
-      // UI rather than reporting a generic failure.
       if (!ingest.scored) {
-        _error = ingest.needsSupportSet
-            ? 'The note was stored, but no labelled examples exist for this '
-                'patient, so no comparison could be made. Add labelled notes to '
-                'enable analysis.'
-            : 'The note was stored, but the clinical model did not return a '
-                'usable score (${ingest.status})'
-                '${ingest.scoreProvenance == null ? '' : ': ${ingest.scoreProvenance}'}.';
+        _error = failureReason;
       }
 
       _status = ChartStatus.ready;

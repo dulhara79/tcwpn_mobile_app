@@ -87,7 +87,7 @@ flutter build apk --release `
   --dart-define=TCWPN_BASE=$env:TCWPN_BASE `
   --dart-define=DEMO_DATA=false `
   --dart-define=AUTH_SALT=r26-ds012-local-salt `
-  --dart-define=AUTH_LOCAL=$env:AUTH_LOCAL`
+  --dart-define=AUTH_LOCAL=$env:AUTH_LOCAL
 ```
 
 Output: `build/app/outputs/flutter-apk/app-release.apk`

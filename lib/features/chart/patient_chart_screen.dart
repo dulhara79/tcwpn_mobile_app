@@ -594,7 +594,10 @@ class _NoteTile extends StatelessWidget {
               style: AppTheme.data(
                 size: 15,
                 weight: FontWeight.w600,
-                color: r == null
+                // Green means "below the decision threshold". With no threshold
+                // published there is nothing to be below, so the score is shown
+                // neutral rather than reassuring.
+                color: r == null || !r.thresholdReported
                     ? Ds.inkFaint
                     : (r.isPositive ? Ds.red : Ds.green),
               ),

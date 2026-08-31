@@ -281,14 +281,21 @@ class FusionDetailScreen extends StatelessWidget {
                         Expanded(
                           child: Readout(
                             label: 'CONFIDENCE',
-                            value:
-                                '${(latestNote!.result!.confidence * 100).round()}%',
+                            // double.nan.round() THROWS UnsupportedError in
+                            // Dart — it does not produce 0. An assessment whose
+                            // component published no confidence would have
+                            // crashed this panel.
+                            value: latestNote!.result!.confidenceReported
+                                ? '${(latestNote!.result!.confidence * 100).round()}%'
+                                : '—',
                           ),
                         ),
                         Expanded(
                           child: Readout(
                             label: 'SHOTS',
-                            value: '${latestNote!.result!.supportK}',
+                            value: latestNote!.result!.detailReturned
+                                ? '${latestNote!.result!.supportK}'
+                                : '—',
                           ),
                         ),
                       ],
