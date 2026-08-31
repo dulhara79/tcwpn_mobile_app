@@ -152,9 +152,12 @@ class ApiClient {
   /// reads like a wrong password instead of like a missing session.
   Map<String, String> get _headers {
     final bearer = _bearer();
+    final host = Uri.tryParse(baseUrl)?.host.toLowerCase() ?? '';
     return {
       'Content-Type': 'application/json',
       'Accept': 'application/json',
+      if (host.endsWith('.ngrok-free.dev'))
+        'ngrok-skip-browser-warning': 'true',
       if (bearer.isNotEmpty) 'Authorization': 'Bearer $bearer',
     };
   }
