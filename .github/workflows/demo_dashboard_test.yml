@@ -1,0 +1,19 @@
+name: Demo clinical dashboard verification
+
+on:
+  push:
+    branches:
+      - demo/investor-mobile-ready
+  workflow_dispatch:
+
+jobs:
+  dashboard-test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: subosito/flutter-action@v2
+        with:
+          channel: stable
+          cache: true
+      - run: flutter pub get
+      - run: flutter test test/clinical_dashboard_test.dart
