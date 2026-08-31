@@ -46,6 +46,12 @@ class _AppShellState extends State<AppShell> {
           _PatientsTab(),
           AlertsScreen(),
           SettingsScreen(),
+          // The bar has five destinations. This stack had four children, so
+          // selecting Ask CARE set an index with no body behind it: the tab
+          // highlighted and the screen went blank. IndexedStack asserts on an
+          // out-of-range index in debug and silently paints nothing in release,
+          // which is why it looked like a navigation bug rather than a crash.
+          AskCareScreen(),
         ],
       ),
       bottomNavigationBar: NavigationBar(

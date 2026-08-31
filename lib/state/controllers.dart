@@ -281,6 +281,16 @@ class ChartController extends ChangeNotifier {
   int get effectiveSupportCount =>
       roster.siteSupport.length + _patientSupport.length;
 
+  /// Anxiety-labelled examples across site and patient sets. Synchronous, from
+  /// the same two lists `effectiveSupportCount` counts, so the panel and the
+  /// pre-flight check can never disagree about what will be sent.
+  int get effectiveAnxietySupportCount =>
+      roster.siteSupport.where((n) => n.isAnxiety).length +
+      _patientSupport.where((n) => n.isAnxiety).length;
+
+  int get effectiveControlSupportCount =>
+      effectiveSupportCount - effectiveAnxietySupportCount;
+
   Future<void> load() async {
     _status = ChartStatus.working;
     notifyListeners();
@@ -630,6 +640,36 @@ class ChartController extends ChangeNotifier {
       final subject = await ensureEnrolled(clinicianId: note.clinicianId);
       final support = await effectiveSupport();
 
+      // TC-WPN builds one prototype per class per request; the checkpoint
+      // stores none. Its contract (deployment_config.json: min_anxiety_support
+      // = min_control_support = 1, allow_default_support_set_in_api = false)
+      // therefore REJECTS a one-sided support set with 422 MISSING_SUPPORT_SET
+      // rather than adapting. There is no meta-trained fallback on the API
+      // path — that exists only in the Space's own demo UI.
+      //
+      // An EMPTY list is fine and is not caught here: the Central Backend
+      // substitutes the site support bank, which is balanced by construction
+      // (select_support_set raises rather than return a one-sided set). It is
+      // specifically a non-empty, single-class local set that cannot be served,
+      // and sending it anyway spent a round trip to be told so.
+      final anxiety = support.where((n) => n.isAnxiety).length;
+      final control = support.length - anxiety;
+      if (support.isNotEmpty && (anxiety == 0 || control == 0)) {
+        _error = 'Your labelled examples are $anxiety anxiety and $control '
+            'control. TC-WPN needs at least one of each to form both '
+            'prototypes. Add a '
+            '${anxiety == 0 ? 'anxiety' : 'control'} example in the support '
+            'set, or clear your local examples to use the site bank instead.';
+        _status = ChartStatus.ready;
+        notifyListeners();
+        throw ApiException(
+          kind: ApiFailure.validation,
+          statusCode: 422,
+          detail: _error!,
+          endpoint: '/v1/clinical-notes',
+        );
+      }
+
       // ONE call. Server-side this runs the clinical model, stores the reading,
       // and triggers fusion. The app does not call the model service, does not
       // decide whether the reading is usable, and does not fuse anything.
@@ -648,9 +688,24 @@ class ChartController extends ChangeNotifier {
 
       _lastIngest = ingest;
 
-      // `result` stays null when the component returned no detail. That renders
-      // as "no assessment available", which is the truth — it must never render
-      // as a model that looked and found nothing.
+      // The component's own explanation of a non-ok status, built BEFORE the
+      // note is written so it can be stored on the note rather than only in the
+      // controller. `_error` is transient — it is cleared by the next action and
+      // is gone entirely by the time a clinician reopens the note from the
+      // chart — so writing only the generic line to `lastAnalysisError` threw
+      // away the one piece of information that says what to do next: a cold
+      // Space, an unusable support bank and a missing score field all rendered
+      // as the same sentence.
+      final String? failureReason = ingest.result != null
+          ? null
+          : ingest.needsSupportSet
+              ? 'The note was stored, but no labelled examples exist for this '
+                  'patient, so no comparison could be made. Add labelled notes '
+                  'to enable analysis.'
+              : 'The note was stored, but the clinical model did not return a '
+                  'usable score (${ingest.status})'
+                  '${ingest.scoreProvenance == null ? '' : ': ${ingest.scoreProvenance}'}.';
+
       final analysed = note.copyWith(
         result: ingest.result,
         clearResult: ingest.result == null,
@@ -659,23 +714,13 @@ class ChartController extends ChangeNotifier {
             ? ClinicalNoteStatus.analysisFailed
             : ClinicalNoteStatus.analysed,
         clearAnalysisError: ingest.result != null,
-        lastAnalysisError: ingest.result == null
-            ? 'The note was submitted, but no assessment was returned.'
-            : null,
+        lastAnalysisError: failureReason,
       );
       _notes = _notes.map((n) => n.id == noteId ? analysed : n).toList();
       await RecordStore.saveNotes(mrn, _notes);
 
-      // Carry the component's own explanation of a non-ok status through to the
-      // UI rather than reporting a generic failure.
       if (!ingest.scored) {
-        _error = ingest.needsSupportSet
-            ? 'The note was stored, but no labelled examples exist for this '
-                'patient, so no comparison could be made. Add labelled notes to '
-                'enable analysis.'
-            : 'The note was stored, but the clinical model did not return a '
-                'usable score (${ingest.status})'
-                '${ingest.scoreProvenance == null ? '' : ': ${ingest.scoreProvenance}'}.';
+        _error = failureReason;
       }
 
       _status = ChartStatus.ready;

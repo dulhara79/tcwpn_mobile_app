@@ -97,7 +97,11 @@ class _NoteAnalysisScreenState extends State<NoteAnalysisScreen> {
         body: ListView(
           padding: const EdgeInsets.fromLTRB(Ds.s4, Ds.s4, Ds.s4, Ds.s10),
           children: [
-            _SupportReadiness(k: k),
+            _SupportReadiness(
+              k: k,
+              anxiety: chart.effectiveAnxietySupportCount,
+              control: chart.effectiveControlSupportCount,
+            ),
             const SizedBox(height: Ds.s4),
             DropdownButtonFormField<String>(
               initialValue: _type,
@@ -382,32 +386,59 @@ class _NoteAnalysisScreenState extends State<NoteAnalysisScreen> {
 /// commits to an analysis.
 class _SupportReadiness extends StatelessWidget {
   final int k;
-  const _SupportReadiness({required this.k});
+
+  /// How many of the [k] examples carry each label. The contract gates on this,
+  /// not on K: TC-WPN forms one prototype per class per request and returns 422
+  /// MISSING_SUPPORT_SET when either class is empty. A panel that reported only
+  /// a total let a clinician reach Analyse with eight anxiety examples, no
+  /// control example, and no warning.
+  final int anxiety;
+  final int control;
+
+  const _SupportReadiness({
+    required this.k,
+    required this.anxiety,
+    required this.control,
+  });
 
   @override
   Widget build(BuildContext context) {
+    final oneSided = k > 0 && (anxiety == 0 || control == 0);
+
     // The proposal targets K = 10–20 for site adaptation.
-    final (tone, headline, detail) = switch (k) {
-      0 => (
-          Ds.amber,
-          'No labelled examples',
-          'The model will use its meta-trained prototypes with no adaptation to '
-              'this site. Add labelled notes to the support set for site-specific '
-              'performance.'
-        ),
-      < 10 => (
-          Ds.amber,
-          '$k of 10 labelled examples',
-          'Below the adaptation target. Predictions are usable but less reliable '
-              'than at K = 10 or above.'
-        ),
-      _ => (
-          Ds.green,
-          '$k labelled examples',
-          'Prototypes will be formed from these, weighted by recency and by the '
-              'model\'s confidence in each one.'
-        ),
-    };
+    final (tone, headline, detail) = oneSided
+        ? (
+            Ds.red,
+            'Support set is one-sided',
+            '$anxiety anxiety, $control control. The model builds one prototype '
+                'per class and cannot run until both are present. Add a '
+                '${anxiety == 0 ? 'anxiety' : 'control'} example, or clear your '
+                'local examples to fall back to the site bank.'
+          )
+        : switch (k) {
+            // NOT "the model will use its meta-trained prototypes". The API
+            // path has no default support set (allow_default_support_set_in_api
+            // is false); with none supplied locally the SITE BANK is used, and
+            // if that is unusable the analysis fails outright.
+            0 => (
+                Ds.amber,
+                'No labelled examples on this device',
+                'The site support bank will be used instead. Add labelled notes '
+                    'here for site-specific adaptation.'
+              ),
+            < 10 => (
+                Ds.amber,
+                '$k of 10 labelled examples · $anxiety anxiety, $control control',
+                'Below the adaptation target. Predictions are usable but less '
+                    'reliable than at K = 10 or above.'
+              ),
+            _ => (
+                Ds.green,
+                '$k labelled examples · $anxiety anxiety, $control control',
+                'Prototypes will be formed from these, weighted by recency and '
+                    'by the model\'s confidence in each one.'
+              ),
+          };
 
     return Container(
       padding: const EdgeInsets.all(Ds.s4),
@@ -420,9 +451,11 @@ class _SupportReadiness extends StatelessWidget {
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           Icon(
-            k >= 10
-                ? Icons.check_circle_outline_rounded
-                : Icons.info_outline_rounded,
+            oneSided
+                ? Icons.error_outline_rounded
+                : (k >= 10
+                    ? Icons.check_circle_outline_rounded
+                    : Icons.info_outline_rounded),
             size: 17,
             color: tone,
           ),

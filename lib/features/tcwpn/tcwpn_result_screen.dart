@@ -21,6 +21,7 @@ import 'package:provider/provider.dart';
 import '../../core/design/components.dart';
 import '../../core/design/theme.dart';
 import '../../core/design/tokens.dart';
+import '../../data/api/api_client.dart';
 import '../../domain/models.dart';
 import '../../state/controllers.dart';
 import 'note_analysis_screen.dart';
@@ -40,12 +41,24 @@ class _TcwpnResultScreenState extends State<TcwpnResultScreen> {
   Widget build(BuildContext context) {
     final r = _note.result;
     if (r == null) {
+      // The two states are NOT interchangeable, and collapsing them is how a
+      // note that reached the backend and came back without an assessment ended
+      // up described as one the clinician had merely parked. The failure text
+      // is the component's own, carried through by ChartController.
+      final failed = _note.analysisFailed;
       return Scaffold(
         appBar: AppBar(title: const Text('Clinical note')),
-        body: const EmptyState(
-          icon: Icons.pending_outlined,
-          title: 'Not analysed yet',
-          body: 'This note is saved as a draft. Analyse it to produce a score.',
+        body: EmptyState(
+          icon: failed
+              ? Icons.error_outline_rounded
+              : Icons.pending_outlined,
+          title: failed ? 'No assessment returned' : 'Not analysed yet',
+          body: failed
+              ? '${_note.lastAnalysisError ?? 'The note was submitted, but no assessment came back.'}\n\n'
+                  'Your note is saved on this device. Nothing you wrote has been lost.'
+              : 'This note is saved as a draft. Analyse it to produce a score.',
+          actionLabel: failed ? 'Retry analysis' : null,
+          onAction: failed ? () => _retry(context) : null,
         ),
       );
     }
@@ -94,6 +107,29 @@ class _TcwpnResultScreenState extends State<TcwpnResultScreen> {
               text:
                   'Confidence is below 60%. Treat this prediction as inconclusive '
                   'and rely on clinical judgement.',
+            ),
+            const SizedBox(height: Ds.s4),
+          ],
+          if (!r.detailReturned) ...[
+            const InlineNotice(
+              icon: Icons.info_outline_rounded,
+              tone: Ds.amber,
+              text:
+                  'The backend scored and stored this note but returned no '
+                  'explanation payload, so the decision threshold, entropy, K '
+                  'and attention attribution are unavailable for this reading. '
+                  'The score below is the one the backend fused.',
+            ),
+            const SizedBox(height: Ds.s4),
+          ],
+          if (r.detailReturned && !r.confidenceReported) ...[
+            const InlineNotice(
+              icon: Icons.help_outline_rounded,
+              tone: Ds.amber,
+              text:
+                  'The component published no confidence for this prediction. '
+                  'Treat it as uncertainty of unknown size, not as high '
+                  'confidence.',
             ),
             const SizedBox(height: Ds.s4),
           ],
@@ -164,23 +200,36 @@ class _TcwpnResultScreenState extends State<TcwpnResultScreen> {
                             size: 38, weight: FontWeight.w600, color: band.fg),
                       ),
                       const SizedBox(height: Ds.s1),
+                      // A class label needs a threshold to exist. When the
+                      // component published neither, the band colour is the
+                      // only claim this panel is entitled to make.
                       Text(
-                        r.prediction,
+                        r.prediction.isEmpty
+                            ? 'CLASS NOT REPORTED'
+                            : r.prediction,
                         style: TextStyle(
                           fontSize: 14,
                           fontWeight: FontWeight.w700,
-                          color: band.fg,
+                          color: r.prediction.isEmpty ? Ds.inkMuted : band.fg,
                           letterSpacing: 0.2,
                         ),
                       ),
                     ],
                   ),
                 ),
-                ConfidenceDial(value: r.confidence),
+                // ConfidenceDial takes a 0..1 double and paints an arc from it.
+                // Feeding it NaN draws an empty ring that reads as "confidence
+                // zero" — a claim the component never made.
+                if (r.confidenceReported)
+                  ConfidenceDial(value: r.confidence)
+                else
+                  const _UnreportedDial(),
               ],
             ),
-            const SizedBox(height: Ds.s4),
-            _thresholdRule(r, band),
+            if (r.thresholdReported) ...[
+              const SizedBox(height: Ds.s4),
+              _thresholdRule(r, band),
+            ],
           ],
         ),
       );
@@ -272,7 +321,10 @@ class _TcwpnResultScreenState extends State<TcwpnResultScreen> {
                 Expanded(
                   child: Readout(
                     label: 'SHOTS (K)',
-                    value: '${r.supportK}',
+                    // K=0 is a real and important state (unadapted prototypes).
+                    // "K was never sent" is a different one, and printing 0 for
+                    // it would assert the model ran with no support set.
+                    value: r.detailReturned ? '${r.supportK}' : '—',
                   ),
                 ),
                 Expanded(
@@ -675,7 +727,11 @@ class _TcwpnResultScreenState extends State<TcwpnResultScreen> {
             _kv('Adaptation', 'Forward-pass prototypes, no gradient update'),
             if (r.temporalContext.isNotEmpty)
               _kv('Visit context', r.temporalContext),
-            _kv('Latency', '${r.latencyMs} ms'),
+            _kv(
+                'Latency',
+                r.detailReturned
+                    ? '${r.latencyMs} ms'
+                    : '${r.latencyMs} ms (client round trip; component did not report)'),
           ],
         ),
       );
@@ -701,5 +757,57 @@ class _TcwpnResultScreenState extends State<TcwpnResultScreen> {
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(
             content: Text('Report export is wired to the PDF service.')),
+      );
+
+  /// Re-sends a note that came back without an assessment. Goes through
+  /// `analyseStoredNote`, so the note keeps its id, its clinical date and its
+  /// clinician attribution — this is a retry, not a second note.
+  Future<void> _retry(BuildContext context) async {
+    final chart = context.read<ChartController>();
+    final messenger = ScaffoldMessenger.of(context);
+    try {
+      final updated = await chart.analyseStoredNote(_note.id);
+      if (!mounted) return;
+      setState(() => _note = updated);
+      if (updated.result == null) {
+        messenger.showSnackBar(SnackBar(
+          content: Text(chart.error ??
+              'The note was submitted again, but no assessment came back.'),
+        ));
+      }
+    } on ApiException catch (e) {
+      if (!mounted) return;
+      messenger.showSnackBar(SnackBar(content: Text(e.message)));
+    }
+  }
+}
+
+/// Stands in for [ConfidenceDial] when the component published no confidence.
+/// Deliberately not a dial at zero: an empty arc is read as a measurement.
+class _UnreportedDial extends StatelessWidget {
+  const _UnreportedDial();
+
+  @override
+  Widget build(BuildContext context) => SizedBox(
+        width: 56,
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Container(
+              width: 56,
+              height: 56,
+              decoration: BoxDecoration(
+                shape: BoxShape.circle,
+                border: Border.all(color: Ds.inkFaint.withValues(alpha: 0.4)),
+              ),
+              alignment: Alignment.center,
+              child: Text('—', style: AppTheme.data(size: 18, color: Ds.inkMuted)),
+            ),
+            const SizedBox(height: 4),
+            Text('Not reported',
+                textAlign: TextAlign.center,
+                style: const TextStyle(fontSize: 9.5, color: Ds.inkMuted)),
+          ],
+        ),
       );
 }

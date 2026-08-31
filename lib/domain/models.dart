@@ -328,6 +328,18 @@ class TcwpnResult {
   final int latencyMs;
   final bool usedDefaultSupportSet;
 
+  /// False when the Central Backend scored the note but returned NO
+  /// `component_detail` blob, so the only real numbers available are the
+  /// envelope's `status` and `score`.
+  ///
+  /// This is not hypothetical: the deployment currently on the tunnel predates
+  /// the commit that added `component_detail` to POST /v1/clinical-notes, so a
+  /// perfectly successful analysis arrives with a score and nothing else. The
+  /// score is real and must be shown; the threshold, entropy, K, attention and
+  /// support contributions were never sent and must NOT be defaulted into
+  /// existence. Every panel that renders one of those checks this flag.
+  final bool detailReturned;
+
   const TcwpnResult({
     required this.prediction,
     required this.riskScore,
@@ -345,27 +357,72 @@ class TcwpnResult {
     this.modelVersion = 'TC-WPN',
     this.latencyMs = 0,
     this.usedDefaultSupportSet = false,
+    this.detailReturned = true,
   });
 
-  bool get isPositive => riskScore >= threshold;
+  /// The assessment as it exists when the backend returned a score and nothing
+  /// else. Everything the component did not send is NaN — not 0, not 0.5 —
+  /// so `confidenceReported` / `thresholdReported` can suppress the panels that
+  /// would otherwise present a default as a measurement.
+  factory TcwpnResult.summaryOnly({
+    required double score,
+    String modelVersion = 'TC-WPN',
+    int latencyMs = 0,
+  }) =>
+      TcwpnResult(
+        prediction: '',
+        riskScore: score,
+        calibratedProbability: score,
+        confidence: double.nan,
+        entropy: double.nan,
+        threshold: double.nan,
+        supportK: 0,
+        modelVersion: modelVersion,
+        latencyMs: latencyMs,
+        detailReturned: false,
+      );
+
+  bool get confidenceReported => !confidence.isNaN;
+  bool get thresholdReported => !threshold.isNaN;
+
+  bool get isPositive => thresholdReported && riskScore >= threshold;
 
   /// Low-confidence predictions must be flagged, not quietly rendered. The
   /// proposal's own safety notice sets the bar at 60%.
-  bool get needsManualReview => confidence < 0.60;
+  ///
+  /// An UNREPORTED confidence is not a low one. When the component published no
+  /// confidence the screen says so explicitly instead of firing this banner off
+  /// a NaN comparison.
+  bool get needsManualReview => confidenceReported && confidence < 0.60;
 
   /// True when the service reported real attention mass for at least one span.
   bool get hasAttribution => spans.any((s) => s.hasWeight);
 
   factory TcwpnResult.fromJson(Map<String, dynamic> j, {int? fallbackLatency}) {
-    final raw = _d(j['risk_score']);
+    // The live TC-WPN Space publishes the score as `probability` alongside
+    // `calibration_status: "uncalibrated"` — the Central Backend's own call_c3
+    // documents this and reads it in the same order. Reading only `risk_score`
+    // here meant a fully successful response rendered as 0.0000.
+    final raw =
+        _d(j['risk_score'] ?? j['probability'] ?? j['score'], double.nan);
+    final threshold = _d(j['threshold'], double.nan);
+    final calibrated = _d(
+        j['calibrated_probability'] ??
+            j['probability'] ??
+            j['risk_score'] ??
+            j['score'],
+        double.nan);
     return TcwpnResult(
-      prediction: _s(j['prediction'],
-          raw >= _d(j['threshold'], .5) ? 'ANXIETY' : 'NO ANXIETY'),
-      riskScore: raw,
-      calibratedProbability: _d(j['calibrated_probability'] ?? j['risk_score']),
-      confidence: _d(j['confidence']),
+      prediction: _s(
+          j['prediction'],
+          (raw.isNaN || threshold.isNaN)
+              ? ''
+              : (raw >= threshold ? 'ANXIETY' : 'NO ANXIETY')),
+      riskScore: raw.isNaN ? 0 : raw,
+      calibratedProbability: calibrated.isNaN ? (raw.isNaN ? 0 : raw) : calibrated,
+      confidence: _d(j['confidence'], double.nan),
       entropy: _d(j['entropy'], double.nan),
-      threshold: _d(j['threshold'], 0.5),
+      threshold: threshold,
       supportK: _i(j['support_k']),
       ece: j['ece'] == null ? null : _d(j['ece']),
       spans: (j['attention_spans'] is List
@@ -388,6 +445,10 @@ class TcwpnResult {
       modelVersion: _s(j['model_version'], 'TC-WPN'),
       latencyMs: _i(j['latency_ms'], fallbackLatency ?? 0),
       usedDefaultSupportSet: _b(j['used_default_support_set']),
+      // Absent for a live component_detail blob (which is by definition detail),
+      // and written explicitly by toJson for the summary-only case, so a note
+      // rehydrated from disk keeps the same suppressed panels it had on screen.
+      detailReturned: _b(j['detail_returned'], true),
     );
   }
 
@@ -395,9 +456,10 @@ class TcwpnResult {
         'prediction': prediction,
         'risk_score': riskScore,
         'calibrated_probability': calibratedProbability,
-        'confidence': confidence,
+        'confidence': confidence.isNaN ? null : confidence,
         'entropy': entropy.isNaN ? null : entropy,
-        'threshold': threshold,
+        'threshold': threshold.isNaN ? null : threshold,
+        'detail_returned': detailReturned,
         'support_k': supportK,
         'ece': ece,
         'attention_spans': spans.map((s) => s.toJson()).toList(),
@@ -482,10 +544,25 @@ class ClinicalNoteIngestResult {
       scoreProvenance: j['score_provenance'] == null
           ? (j['note'] == null ? null : _s(j['note']))
           : _s(j['score_provenance']),
+      // `component_detail` is the full TC-WPN body and is preferred whenever it
+      // is there. When it is NOT — the deployment on the tunnel predates the
+      // commit that added the key — the envelope still carries a real, stored,
+      // fused score, and discarding it made a successful analysis render as an
+      // unanalysed draft. Build the summary-only assessment instead: the score
+      // shown, everything not sent visibly withheld.
+      //
+      // The guard is deliberately narrow. `status` must be exactly `ok` and a
+      // numeric score must be present, so `no_support_set`, `warming_up` and
+      // `error` still produce a null result and the failure banner.
       result: detail is Map && detail.isNotEmpty
           ? TcwpnResult.fromJson(Map<String, dynamic>.from(detail),
               fallbackLatency: fallbackLatency)
-          : null,
+          : (_s(j['status'], 'error') == 'ok' && j['score'] is num
+              ? TcwpnResult.summaryOnly(
+                  score: _d(j['score']),
+                  latencyMs: fallbackLatency ?? 0,
+                )
+              : null),
       fusionTriggered: _b(j['fusion_triggered']),
       fusionResultId: j['fusion_result_id'] == null
           ? (fusion['fusion_result_id'] == null

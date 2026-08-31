@@ -1,0 +1,639 @@
+diff --git a/lib/domain/models.dart b/lib/domain/models.dart
+index dd5f4d9..ccae207 100644
+--- a/lib/domain/models.dart
++++ b/lib/domain/models.dart
+@@ -328,6 +328,18 @@ class TcwpnResult {
+   final int latencyMs;
+   final bool usedDefaultSupportSet;
+ 
++  /// False when the Central Backend scored the note but returned NO
++  /// `component_detail` blob, so the only real numbers available are the
++  /// envelope's `status` and `score`.
++  ///
++  /// This is not hypothetical: the deployment currently on the tunnel predates
++  /// the commit that added `component_detail` to POST /v1/clinical-notes, so a
++  /// perfectly successful analysis arrives with a score and nothing else. The
++  /// score is real and must be shown; the threshold, entropy, K, attention and
++  /// support contributions were never sent and must NOT be defaulted into
++  /// existence. Every panel that renders one of those checks this flag.
++  final bool detailReturned;
++
+   const TcwpnResult({
+     required this.prediction,
+     required this.riskScore,
+@@ -345,27 +357,72 @@ class TcwpnResult {
+     this.modelVersion = 'TC-WPN',
+     this.latencyMs = 0,
+     this.usedDefaultSupportSet = false,
++    this.detailReturned = true,
+   });
+ 
+-  bool get isPositive => riskScore >= threshold;
++  /// The assessment as it exists when the backend returned a score and nothing
++  /// else. Everything the component did not send is NaN — not 0, not 0.5 —
++  /// so `confidenceReported` / `thresholdReported` can suppress the panels that
++  /// would otherwise present a default as a measurement.
++  factory TcwpnResult.summaryOnly({
++    required double score,
++    String modelVersion = 'TC-WPN',
++    int latencyMs = 0,
++  }) =>
++      TcwpnResult(
++        prediction: '',
++        riskScore: score,
++        calibratedProbability: score,
++        confidence: double.nan,
++        entropy: double.nan,
++        threshold: double.nan,
++        supportK: 0,
++        modelVersion: modelVersion,
++        latencyMs: latencyMs,
++        detailReturned: false,
++      );
++
++  bool get confidenceReported => !confidence.isNaN;
++  bool get thresholdReported => !threshold.isNaN;
++
++  bool get isPositive => thresholdReported && riskScore >= threshold;
+ 
+   /// Low-confidence predictions must be flagged, not quietly rendered. The
+   /// proposal's own safety notice sets the bar at 60%.
+-  bool get needsManualReview => confidence < 0.60;
++  ///
++  /// An UNREPORTED confidence is not a low one. When the component published no
++  /// confidence the screen says so explicitly instead of firing this banner off
++  /// a NaN comparison.
++  bool get needsManualReview => confidenceReported && confidence < 0.60;
+ 
+   /// True when the service reported real attention mass for at least one span.
+   bool get hasAttribution => spans.any((s) => s.hasWeight);
+ 
+   factory TcwpnResult.fromJson(Map<String, dynamic> j, {int? fallbackLatency}) {
+-    final raw = _d(j['risk_score']);
++    // The live TC-WPN Space publishes the score as `probability` alongside
++    // `calibration_status: "uncalibrated"` — the Central Backend's own call_c3
++    // documents this and reads it in the same order. Reading only `risk_score`
++    // here meant a fully successful response rendered as 0.0000.
++    final raw =
++        _d(j['risk_score'] ?? j['probability'] ?? j['score'], double.nan);
++    final threshold = _d(j['threshold'], double.nan);
++    final calibrated = _d(
++        j['calibrated_probability'] ??
++            j['probability'] ??
++            j['risk_score'] ??
++            j['score'],
++        double.nan);
+     return TcwpnResult(
+-      prediction: _s(j['prediction'],
+-          raw >= _d(j['threshold'], .5) ? 'ANXIETY' : 'NO ANXIETY'),
+-      riskScore: raw,
+-      calibratedProbability: _d(j['calibrated_probability'] ?? j['risk_score']),
+-      confidence: _d(j['confidence']),
++      prediction: _s(
++          j['prediction'],
++          (raw.isNaN || threshold.isNaN)
++              ? ''
++              : (raw >= threshold ? 'ANXIETY' : 'NO ANXIETY')),
++      riskScore: raw.isNaN ? 0 : raw,
++      calibratedProbability: calibrated.isNaN ? (raw.isNaN ? 0 : raw) : calibrated,
++      confidence: _d(j['confidence'], double.nan),
+       entropy: _d(j['entropy'], double.nan),
+-      threshold: _d(j['threshold'], 0.5),
++      threshold: threshold,
+       supportK: _i(j['support_k']),
+       ece: j['ece'] == null ? null : _d(j['ece']),
+       spans: (j['attention_spans'] is List
+@@ -388,6 +445,10 @@ class TcwpnResult {
+       modelVersion: _s(j['model_version'], 'TC-WPN'),
+       latencyMs: _i(j['latency_ms'], fallbackLatency ?? 0),
+       usedDefaultSupportSet: _b(j['used_default_support_set']),
++      // Absent for a live component_detail blob (which is by definition detail),
++      // and written explicitly by toJson for the summary-only case, so a note
++      // rehydrated from disk keeps the same suppressed panels it had on screen.
++      detailReturned: _b(j['detail_returned'], true),
+     );
+   }
+ 
+@@ -395,9 +456,10 @@ class TcwpnResult {
+         'prediction': prediction,
+         'risk_score': riskScore,
+         'calibrated_probability': calibratedProbability,
+-        'confidence': confidence,
++        'confidence': confidence.isNaN ? null : confidence,
+         'entropy': entropy.isNaN ? null : entropy,
+-        'threshold': threshold,
++        'threshold': threshold.isNaN ? null : threshold,
++        'detail_returned': detailReturned,
+         'support_k': supportK,
+         'ece': ece,
+         'attention_spans': spans.map((s) => s.toJson()).toList(),
+@@ -482,10 +544,25 @@ class ClinicalNoteIngestResult {
+       scoreProvenance: j['score_provenance'] == null
+           ? (j['note'] == null ? null : _s(j['note']))
+           : _s(j['score_provenance']),
++      // `component_detail` is the full TC-WPN body and is preferred whenever it
++      // is there. When it is NOT — the deployment on the tunnel predates the
++      // commit that added the key — the envelope still carries a real, stored,
++      // fused score, and discarding it made a successful analysis render as an
++      // unanalysed draft. Build the summary-only assessment instead: the score
++      // shown, everything not sent visibly withheld.
++      //
++      // The guard is deliberately narrow. `status` must be exactly `ok` and a
++      // numeric score must be present, so `no_support_set`, `warming_up` and
++      // `error` still produce a null result and the failure banner.
+       result: detail is Map && detail.isNotEmpty
+           ? TcwpnResult.fromJson(Map<String, dynamic>.from(detail),
+               fallbackLatency: fallbackLatency)
+-          : null,
++          : (_s(j['status'], 'error') == 'ok' && j['score'] is num
++              ? TcwpnResult.summaryOnly(
++                  score: _d(j['score']),
++                  latencyMs: fallbackLatency ?? 0,
++                )
++              : null),
+       fusionTriggered: _b(j['fusion_triggered']),
+       fusionResultId: j['fusion_result_id'] == null
+           ? (fusion['fusion_result_id'] == null
+diff --git a/lib/features/chart/patient_chart_screen.dart b/lib/features/chart/patient_chart_screen.dart
+index 2359012..73aa61a 100644
+--- a/lib/features/chart/patient_chart_screen.dart
++++ b/lib/features/chart/patient_chart_screen.dart
+@@ -594,7 +594,10 @@ class _NoteTile extends StatelessWidget {
+               style: AppTheme.data(
+                 size: 15,
+                 weight: FontWeight.w600,
+-                color: r == null
++                // Green means "below the decision threshold". With no threshold
++                // published there is nothing to be below, so the score is shown
++                // neutral rather than reassuring.
++                color: r == null || !r.thresholdReported
+                     ? Ds.inkFaint
+                     : (r.isPositive ? Ds.red : Ds.green),
+               ),
+diff --git a/lib/features/fusion/fusion_detail_screen.dart b/lib/features/fusion/fusion_detail_screen.dart
+index 7ac3f44..b228266 100644
+--- a/lib/features/fusion/fusion_detail_screen.dart
++++ b/lib/features/fusion/fusion_detail_screen.dart
+@@ -281,14 +281,21 @@ class FusionDetailScreen extends StatelessWidget {
+                         Expanded(
+                           child: Readout(
+                             label: 'CONFIDENCE',
+-                            value:
+-                                '${(latestNote!.result!.confidence * 100).round()}%',
++                            // double.nan.round() THROWS UnsupportedError in
++                            // Dart — it does not produce 0. An assessment whose
++                            // component published no confidence would have
++                            // crashed this panel.
++                            value: latestNote!.result!.confidenceReported
++                                ? '${(latestNote!.result!.confidence * 100).round()}%'
++                                : '—',
+                           ),
+                         ),
+                         Expanded(
+                           child: Readout(
+                             label: 'SHOTS',
+-                            value: '${latestNote!.result!.supportK}',
++                            value: latestNote!.result!.detailReturned
++                                ? '${latestNote!.result!.supportK}'
++                                : '—',
+                           ),
+                         ),
+                       ],
+diff --git a/lib/features/shell.dart b/lib/features/shell.dart
+index 52da906..78593e5 100644
+--- a/lib/features/shell.dart
++++ b/lib/features/shell.dart
+@@ -46,6 +46,12 @@ class _AppShellState extends State<AppShell> {
+           _PatientsTab(),
+           AlertsScreen(),
+           SettingsScreen(),
++          // The bar has five destinations. This stack had four children, so
++          // selecting Ask CARE set an index with no body behind it: the tab
++          // highlighted and the screen went blank. IndexedStack asserts on an
++          // out-of-range index in debug and silently paints nothing in release,
++          // which is why it looked like a navigation bug rather than a crash.
++          AskCareScreen(),
+         ],
+       ),
+       bottomNavigationBar: NavigationBar(
+diff --git a/lib/features/tcwpn/note_analysis_screen.dart b/lib/features/tcwpn/note_analysis_screen.dart
+index 499a71c..925d822 100644
+--- a/lib/features/tcwpn/note_analysis_screen.dart
++++ b/lib/features/tcwpn/note_analysis_screen.dart
+@@ -97,7 +97,11 @@ class _NoteAnalysisScreenState extends State<NoteAnalysisScreen> {
+         body: ListView(
+           padding: const EdgeInsets.fromLTRB(Ds.s4, Ds.s4, Ds.s4, Ds.s10),
+           children: [
+-            _SupportReadiness(k: k),
++            _SupportReadiness(
++              k: k,
++              anxiety: chart.effectiveAnxietySupportCount,
++              control: chart.effectiveControlSupportCount,
++            ),
+             const SizedBox(height: Ds.s4),
+             DropdownButtonFormField<String>(
+               initialValue: _type,
+@@ -382,32 +386,59 @@ class _NoteAnalysisScreenState extends State<NoteAnalysisScreen> {
+ /// commits to an analysis.
+ class _SupportReadiness extends StatelessWidget {
+   final int k;
+-  const _SupportReadiness({required this.k});
++
++  /// How many of the [k] examples carry each label. The contract gates on this,
++  /// not on K: TC-WPN forms one prototype per class per request and returns 422
++  /// MISSING_SUPPORT_SET when either class is empty. A panel that reported only
++  /// a total let a clinician reach Analyse with eight anxiety examples, no
++  /// control example, and no warning.
++  final int anxiety;
++  final int control;
++
++  const _SupportReadiness({
++    required this.k,
++    required this.anxiety,
++    required this.control,
++  });
+ 
+   @override
+   Widget build(BuildContext context) {
++    final oneSided = k > 0 && (anxiety == 0 || control == 0);
++
+     // The proposal targets K = 10–20 for site adaptation.
+-    final (tone, headline, detail) = switch (k) {
+-      0 => (
+-          Ds.amber,
+-          'No labelled examples',
+-          'The model will use its meta-trained prototypes with no adaptation to '
+-              'this site. Add labelled notes to the support set for site-specific '
+-              'performance.'
+-        ),
+-      < 10 => (
+-          Ds.amber,
+-          '$k of 10 labelled examples',
+-          'Below the adaptation target. Predictions are usable but less reliable '
+-              'than at K = 10 or above.'
+-        ),
+-      _ => (
+-          Ds.green,
+-          '$k labelled examples',
+-          'Prototypes will be formed from these, weighted by recency and by the '
+-              'model\'s confidence in each one.'
+-        ),
+-    };
++    final (tone, headline, detail) = oneSided
++        ? (
++            Ds.red,
++            'Support set is one-sided',
++            '$anxiety anxiety, $control control. The model builds one prototype '
++                'per class and cannot run until both are present. Add a '
++                '${anxiety == 0 ? 'anxiety' : 'control'} example, or clear your '
++                'local examples to fall back to the site bank.'
++          )
++        : switch (k) {
++            // NOT "the model will use its meta-trained prototypes". The API
++            // path has no default support set (allow_default_support_set_in_api
++            // is false); with none supplied locally the SITE BANK is used, and
++            // if that is unusable the analysis fails outright.
++            0 => (
++                Ds.amber,
++                'No labelled examples on this device',
++                'The site support bank will be used instead. Add labelled notes '
++                    'here for site-specific adaptation.'
++              ),
++            < 10 => (
++                Ds.amber,
++                '$k of 10 labelled examples · $anxiety anxiety, $control control',
++                'Below the adaptation target. Predictions are usable but less '
++                    'reliable than at K = 10 or above.'
++              ),
++            _ => (
++                Ds.green,
++                '$k labelled examples · $anxiety anxiety, $control control',
++                'Prototypes will be formed from these, weighted by recency and '
++                    'by the model\'s confidence in each one.'
++              ),
++          };
+ 
+     return Container(
+       padding: const EdgeInsets.all(Ds.s4),
+@@ -420,9 +451,11 @@ class _SupportReadiness extends StatelessWidget {
+         crossAxisAlignment: CrossAxisAlignment.start,
+         children: [
+           Icon(
+-            k >= 10
+-                ? Icons.check_circle_outline_rounded
+-                : Icons.info_outline_rounded,
++            oneSided
++                ? Icons.error_outline_rounded
++                : (k >= 10
++                    ? Icons.check_circle_outline_rounded
++                    : Icons.info_outline_rounded),
+             size: 17,
+             color: tone,
+           ),
+diff --git a/lib/features/tcwpn/tcwpn_result_screen.dart b/lib/features/tcwpn/tcwpn_result_screen.dart
+index 5045388..4f3b6ba 100644
+--- a/lib/features/tcwpn/tcwpn_result_screen.dart
++++ b/lib/features/tcwpn/tcwpn_result_screen.dart
+@@ -21,6 +21,7 @@ import 'package:provider/provider.dart';
+ import '../../core/design/components.dart';
+ import '../../core/design/theme.dart';
+ import '../../core/design/tokens.dart';
++import '../../data/api/api_client.dart';
+ import '../../domain/models.dart';
+ import '../../state/controllers.dart';
+ import 'note_analysis_screen.dart';
+@@ -40,12 +41,24 @@ class _TcwpnResultScreenState extends State<TcwpnResultScreen> {
+   Widget build(BuildContext context) {
+     final r = _note.result;
+     if (r == null) {
++      // The two states are NOT interchangeable, and collapsing them is how a
++      // note that reached the backend and came back without an assessment ended
++      // up described as one the clinician had merely parked. The failure text
++      // is the component's own, carried through by ChartController.
++      final failed = _note.analysisFailed;
+       return Scaffold(
+         appBar: AppBar(title: const Text('Clinical note')),
+-        body: const EmptyState(
+-          icon: Icons.pending_outlined,
+-          title: 'Not analysed yet',
+-          body: 'This note is saved as a draft. Analyse it to produce a score.',
++        body: EmptyState(
++          icon: failed
++              ? Icons.error_outline_rounded
++              : Icons.pending_outlined,
++          title: failed ? 'No assessment returned' : 'Not analysed yet',
++          body: failed
++              ? '${_note.lastAnalysisError ?? 'The note was submitted, but no assessment came back.'}\n\n'
++                  'Your note is saved on this device. Nothing you wrote has been lost.'
++              : 'This note is saved as a draft. Analyse it to produce a score.',
++          actionLabel: failed ? 'Retry analysis' : null,
++          onAction: failed ? () => _retry(context) : null,
+         ),
+       );
+     }
+@@ -97,6 +110,29 @@ class _TcwpnResultScreenState extends State<TcwpnResultScreen> {
+             ),
+             const SizedBox(height: Ds.s4),
+           ],
++          if (!r.detailReturned) ...[
++            const InlineNotice(
++              icon: Icons.info_outline_rounded,
++              tone: Ds.amber,
++              text:
++                  'The backend scored and stored this note but returned no '
++                  'explanation payload, so the decision threshold, entropy, K '
++                  'and attention attribution are unavailable for this reading. '
++                  'The score below is the one the backend fused.',
++            ),
++            const SizedBox(height: Ds.s4),
++          ],
++          if (r.detailReturned && !r.confidenceReported) ...[
++            const InlineNotice(
++              icon: Icons.help_outline_rounded,
++              tone: Ds.amber,
++              text:
++                  'The component published no confidence for this prediction. '
++                  'Treat it as uncertainty of unknown size, not as high '
++                  'confidence.',
++            ),
++            const SizedBox(height: Ds.s4),
++          ],
+           if (r.usedDefaultSupportSet) ...[
+             const InlineNotice(
+               icon: Icons.dataset_outlined,
+@@ -164,23 +200,36 @@ class _TcwpnResultScreenState extends State<TcwpnResultScreen> {
+                             size: 38, weight: FontWeight.w600, color: band.fg),
+                       ),
+                       const SizedBox(height: Ds.s1),
++                      // A class label needs a threshold to exist. When the
++                      // component published neither, the band colour is the
++                      // only claim this panel is entitled to make.
+                       Text(
+-                        r.prediction,
++                        r.prediction.isEmpty
++                            ? 'CLASS NOT REPORTED'
++                            : r.prediction,
+                         style: TextStyle(
+                           fontSize: 14,
+                           fontWeight: FontWeight.w700,
+-                          color: band.fg,
++                          color: r.prediction.isEmpty ? Ds.inkMuted : band.fg,
+                           letterSpacing: 0.2,
+                         ),
+                       ),
+                     ],
+                   ),
+                 ),
+-                ConfidenceDial(value: r.confidence),
++                // ConfidenceDial takes a 0..1 double and paints an arc from it.
++                // Feeding it NaN draws an empty ring that reads as "confidence
++                // zero" — a claim the component never made.
++                if (r.confidenceReported)
++                  ConfidenceDial(value: r.confidence)
++                else
++                  const _UnreportedDial(),
+               ],
+             ),
+-            const SizedBox(height: Ds.s4),
+-            _thresholdRule(r, band),
++            if (r.thresholdReported) ...[
++              const SizedBox(height: Ds.s4),
++              _thresholdRule(r, band),
++            ],
+           ],
+         ),
+       );
+@@ -272,7 +321,10 @@ class _TcwpnResultScreenState extends State<TcwpnResultScreen> {
+                 Expanded(
+                   child: Readout(
+                     label: 'SHOTS (K)',
+-                    value: '${r.supportK}',
++                    // K=0 is a real and important state (unadapted prototypes).
++                    // "K was never sent" is a different one, and printing 0 for
++                    // it would assert the model ran with no support set.
++                    value: r.detailReturned ? '${r.supportK}' : '—',
+                   ),
+                 ),
+                 Expanded(
+@@ -675,7 +727,11 @@ class _TcwpnResultScreenState extends State<TcwpnResultScreen> {
+             _kv('Adaptation', 'Forward-pass prototypes, no gradient update'),
+             if (r.temporalContext.isNotEmpty)
+               _kv('Visit context', r.temporalContext),
+-            _kv('Latency', '${r.latencyMs} ms'),
++            _kv(
++                'Latency',
++                r.detailReturned
++                    ? '${r.latencyMs} ms'
++                    : '${r.latencyMs} ms (client round trip; component did not report)'),
+           ],
+         ),
+       );
+@@ -702,4 +758,56 @@ class _TcwpnResultScreenState extends State<TcwpnResultScreen> {
+         const SnackBar(
+             content: Text('Report export is wired to the PDF service.')),
+       );
++
++  /// Re-sends a note that came back without an assessment. Goes through
++  /// `analyseStoredNote`, so the note keeps its id, its clinical date and its
++  /// clinician attribution — this is a retry, not a second note.
++  Future<void> _retry(BuildContext context) async {
++    final chart = context.read<ChartController>();
++    final messenger = ScaffoldMessenger.of(context);
++    try {
++      final updated = await chart.analyseStoredNote(_note.id);
++      if (!mounted) return;
++      setState(() => _note = updated);
++      if (updated.result == null) {
++        messenger.showSnackBar(SnackBar(
++          content: Text(chart.error ??
++              'The note was submitted again, but no assessment came back.'),
++        ));
++      }
++    } on ApiException catch (e) {
++      if (!mounted) return;
++      messenger.showSnackBar(SnackBar(content: Text(e.message)));
++    }
++  }
++}
++
++/// Stands in for [ConfidenceDial] when the component published no confidence.
++/// Deliberately not a dial at zero: an empty arc is read as a measurement.
++class _UnreportedDial extends StatelessWidget {
++  const _UnreportedDial();
++
++  @override
++  Widget build(BuildContext context) => SizedBox(
++        width: 56,
++        child: Column(
++          mainAxisSize: MainAxisSize.min,
++          children: [
++            Container(
++              width: 56,
++              height: 56,
++              decoration: BoxDecoration(
++                shape: BoxShape.circle,
++                border: Border.all(color: Ds.inkFaint.withValues(alpha: 0.4)),
++              ),
++              alignment: Alignment.center,
++              child: Text('—', style: AppTheme.data(size: 18, color: Ds.inkMuted)),
++            ),
++            const SizedBox(height: 4),
++            Text('Not reported',
++                textAlign: TextAlign.center,
++                style: const TextStyle(fontSize: 9.5, color: Ds.inkMuted)),
++          ],
++        ),
++      );
+ }
+diff --git a/lib/state/controllers.dart b/lib/state/controllers.dart
+index b5ce622..549df07 100644
+--- a/lib/state/controllers.dart
++++ b/lib/state/controllers.dart
+@@ -281,6 +281,16 @@ class ChartController extends ChangeNotifier {
+   int get effectiveSupportCount =>
+       roster.siteSupport.length + _patientSupport.length;
+ 
++  /// Anxiety-labelled examples across site and patient sets. Synchronous, from
++  /// the same two lists `effectiveSupportCount` counts, so the panel and the
++  /// pre-flight check can never disagree about what will be sent.
++  int get effectiveAnxietySupportCount =>
++      roster.siteSupport.where((n) => n.isAnxiety).length +
++      _patientSupport.where((n) => n.isAnxiety).length;
++
++  int get effectiveControlSupportCount =>
++      effectiveSupportCount - effectiveAnxietySupportCount;
++
+   Future<void> load() async {
+     _status = ChartStatus.working;
+     notifyListeners();
+@@ -630,6 +640,36 @@ class ChartController extends ChangeNotifier {
+       final subject = await ensureEnrolled(clinicianId: note.clinicianId);
+       final support = await effectiveSupport();
+ 
++      // TC-WPN builds one prototype per class per request; the checkpoint
++      // stores none. Its contract (deployment_config.json: min_anxiety_support
++      // = min_control_support = 1, allow_default_support_set_in_api = false)
++      // therefore REJECTS a one-sided support set with 422 MISSING_SUPPORT_SET
++      // rather than adapting. There is no meta-trained fallback on the API
++      // path — that exists only in the Space's own demo UI.
++      //
++      // An EMPTY list is fine and is not caught here: the Central Backend
++      // substitutes the site support bank, which is balanced by construction
++      // (select_support_set raises rather than return a one-sided set). It is
++      // specifically a non-empty, single-class local set that cannot be served,
++      // and sending it anyway spent a round trip to be told so.
++      final anxiety = support.where((n) => n.isAnxiety).length;
++      final control = support.length - anxiety;
++      if (support.isNotEmpty && (anxiety == 0 || control == 0)) {
++        _error = 'Your labelled examples are $anxiety anxiety and $control '
++            'control. TC-WPN needs at least one of each to form both '
++            'prototypes. Add a '
++            '${anxiety == 0 ? 'anxiety' : 'control'} example in the support '
++            'set, or clear your local examples to use the site bank instead.';
++        _status = ChartStatus.ready;
++        notifyListeners();
++        throw ApiException(
++          kind: ApiFailure.validation,
++          statusCode: 422,
++          detail: _error!,
++          endpoint: '/v1/clinical-notes',
++        );
++      }
++
+       // ONE call. Server-side this runs the clinical model, stores the reading,
+       // and triggers fusion. The app does not call the model service, does not
+       // decide whether the reading is usable, and does not fuse anything.
+@@ -648,9 +688,24 @@ class ChartController extends ChangeNotifier {
+ 
+       _lastIngest = ingest;
+ 
+-      // `result` stays null when the component returned no detail. That renders
+-      // as "no assessment available", which is the truth — it must never render
+-      // as a model that looked and found nothing.
++      // The component's own explanation of a non-ok status, built BEFORE the
++      // note is written so it can be stored on the note rather than only in the
++      // controller. `_error` is transient — it is cleared by the next action and
++      // is gone entirely by the time a clinician reopens the note from the
++      // chart — so writing only the generic line to `lastAnalysisError` threw
++      // away the one piece of information that says what to do next: a cold
++      // Space, an unusable support bank and a missing score field all rendered
++      // as the same sentence.
++      final String? failureReason = ingest.result != null
++          ? null
++          : ingest.needsSupportSet
++              ? 'The note was stored, but no labelled examples exist for this '
++                  'patient, so no comparison could be made. Add labelled notes '
++                  'to enable analysis.'
++              : 'The note was stored, but the clinical model did not return a '
++                  'usable score (${ingest.status})'
++                  '${ingest.scoreProvenance == null ? '' : ': ${ingest.scoreProvenance}'}.';
++
+       final analysed = note.copyWith(
+         result: ingest.result,
+         clearResult: ingest.result == null,
+@@ -659,23 +714,13 @@ class ChartController extends ChangeNotifier {
+             ? ClinicalNoteStatus.analysisFailed
+             : ClinicalNoteStatus.analysed,
+         clearAnalysisError: ingest.result != null,
+-        lastAnalysisError: ingest.result == null
+-            ? 'The note was submitted, but no assessment was returned.'
+-            : null,
++        lastAnalysisError: failureReason,
+       );
+       _notes = _notes.map((n) => n.id == noteId ? analysed : n).toList();
+       await RecordStore.saveNotes(mrn, _notes);
+ 
+-      // Carry the component's own explanation of a non-ok status through to the
+-      // UI rather than reporting a generic failure.
+       if (!ingest.scored) {
+-        _error = ingest.needsSupportSet
+-            ? 'The note was stored, but no labelled examples exist for this '
+-                'patient, so no comparison could be made. Add labelled notes to '
+-                'enable analysis.'
+-            : 'The note was stored, but the clinical model did not return a '
+-                'usable score (${ingest.status})'
+-                '${ingest.scoreProvenance == null ? '' : ': ${ingest.scoreProvenance}'}.';
++        _error = failureReason;
+       }
+ 
+       _status = ChartStatus.ready;
