@@ -211,7 +211,9 @@ class _VerdictHeader extends StatelessWidget {
               _Fact('Assessment status', fusion.assessmentLabel),
               if (fusion.confidence != null)
                 _Fact('Confidence',
-                    '${(fusion.confidence! * 100).round()}%'),
+                    fusion.confidence!.isFinite
+                        ? '${(fusion.confidence! * 100).round()}%'
+                        : '\u2014'),
               _Fact('Weights',
                   fusion.renormalised ? 'Renormalised' : 'Framework default'),
             ],
