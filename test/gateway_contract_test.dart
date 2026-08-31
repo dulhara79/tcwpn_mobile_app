@@ -132,6 +132,20 @@ void main() {
 
   // ───────────────────────────────────────────────────────────────────────────
   group('the app talks to the Central Backend and nothing else', () {
+    test('ngrok requests bypass the browser warning page', () async {
+      final api = ApiClient(
+        'https://example.ngrok-free.dev',
+        client: MockClient((req) async {
+          sent.add(req);
+          return http.Response('{"status":"ok"}', 200);
+        }),
+      );
+
+      await api.get('/health', retries: 0);
+
+      expect(sent.single.headers['ngrok-skip-browser-warning'], 'true');
+    });
+
     test('a note goes to /v1/clinical-notes, not to a model service', () async {
       final g = _gateway(
         (_) async => http.Response(
