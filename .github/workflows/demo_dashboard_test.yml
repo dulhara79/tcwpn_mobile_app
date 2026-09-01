@@ -16,4 +16,4 @@ jobs:
           channel: stable
           cache: true
       - run: flutter pub get
-      - run: flutter test test/clinical_dashboard_test.dart
+      - run: flutter test test/clinical_dashboard_test.dart test/explain_demo_fallback_test.dart
