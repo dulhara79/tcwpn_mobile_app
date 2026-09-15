@@ -26,12 +26,14 @@ jobs:
           test/p1_p2_api_failure_test.dart
           test/composite_dashboard_repository_test.dart
           test/dashboard_controller_test.dart
+          test/dashboard_cache_test.dart
       - name: Focused analysis
         run: >-
           flutter analyze
           lib/domain/contracts
           lib/domain/repositories
           lib/data/repositories
+          lib/data/local/dashboard_cache.dart
           lib/state/async_data_state.dart
           lib/state/dashboard_controller.dart
           lib/data/api/api_client.dart
