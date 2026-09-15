@@ -1,0 +1,185 @@
+name: Apply P0 identity patch
+
+on:
+  push:
+    branches:
+      - integration/clinanx-p0-contract-first
+
+permissions:
+  contents: write
+
+jobs:
+  patch:
+    if: github.event.head_commit.message == 'chore: apply P0 identity patch'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: integration/clinanx-p0-contract-first
+          fetch-depth: 0
+      - name: Apply exact identity-contract replacements
+        run: |
+          python3 - <<'PY'
+          from pathlib import Path
+
+          gateway = Path('lib/data/api/gateways.dart')
+          text = gateway.read_text()
+          old = '''  /// Attaches a scanned AURA participant id to the subject the patient
+          /// already created via /v1/subjects/self. Returns the subject_id on success,
+          /// null if the backend has no AURA registration for that id (HTTP 404).
+          Future<String?> attach({
+            required String appUserId,
+            String? mrn,
+            String? enrolledBy,
+          }) async {
+            try {
+              final json = await _api.post(
+                  '/v1/subjects/attach',
+                  {
+                    'app_user_id': appUserId,
+                    if (mrn != null && mrn.isNotEmpty) 'mrn': mrn,
+                    if (enrolledBy != null && enrolledBy.isNotEmpty)
+                      'enrolled_by': enrolledBy,
+                  },
+                  timeout: Env.quickTimeout);
+              return json['subject_id'] as String?;
+            } on ApiException catch (e) {
+              if (e.kind == ApiFailure.notFound) return null;
+              rethrow;
+            }
+          }
+
+          '''
+          new = '''  /// Resolves a patient-created AURA participant id through the backend's
+          /// existing app_user_id alias contract. This is a read-only lookup: ClinAnx
+          /// does not invent or depend on a separate /subjects/attach route.
+          Future<String?> resolveAppUserId(String appUserId) async {
+            try {
+              final json = await _api.get(
+                '/v1/subjects/resolve?app_user_id='
+                '${Uri.encodeQueryComponent(appUserId)}',
+                timeout: Env.quickTimeout,
+              );
+              final id = json['subject_id'];
+              return id == null ? null : '$id';
+            } on ApiException catch (e) {
+              if (e.kind == ApiFailure.notFound) return null;
+              rethrow;
+            }
+          }
+
+          '''
+          if old not in text:
+              raise SystemExit('Expected attach block not found in gateways.dart')
+          gateway.write_text(text.replace(old, new, 1))
+
+          controllers = Path('lib/state/controllers.dart')
+          text = controllers.read_text()
+          old = '''  /// Ensures this patient exists on the backend and returns their subject_id.
+          ///
+          /// Three paths, in order of preference:
+          ///   1. already stored locally — no network call;
+          ///   2. known to the backend under this MRN — resolve and store;
+          ///   3. unknown — enrol, store, and hold the pairing code for display.
+          ///
+          /// Enrolling an MRN the backend already knows is safe: it returns the existing
+          /// subject with a fresh pairing code rather than creating a second patient.
+          Future<String> ensureEnrolled({String? clinicianId}) async {
+            if (isEnrolled) return _subjectId!;
+
+            final resolved = await _backend.resolveMrn(mrn);
+            if (resolved != null) {
+              _subjectId = resolved;
+              await _linkBehaviouralId(resolved);
+              await RecordStore.saveSubjectId(mrn, resolved);
+              notifyListeners();
+              return resolved;
+            }
+
+            // Patient-first: the patient registered in AURA before visiting the
+            // clinic. Attach links the clinician to the subject AURA already created.
+            if (_participantIdPattern.hasMatch(mrn.trim().toUpperCase())) {
+              final attached = await _backend.attach(
+                appUserId: mrn.trim().toUpperCase(),
+                mrn: mrn,
+                enrolledBy: clinicianId,
+              );
+              if (attached != null) {
+                _subjectId = attached;
+                await _linkBehaviouralId(attached);
+                await RecordStore.saveSubjectId(mrn, attached);
+                notifyListeners();
+                return attached;
+              }
+            }
+
+            final enrolment = await _backend.enrol(mrn: mrn, enrolledBy: clinicianId);
+            _subjectId = enrolment.subjectId;
+            await _linkBehaviouralId(enrolment.subjectId);
+            _pendingPairing = enrolment;
+            await RecordStore.saveSubjectId(mrn, enrolment.subjectId);
+            notifyListeners();
+            return enrolment.subjectId;
+          }
+          '''
+          new = '''  /// Ensures this patient exists on the backend and returns their subject_id.
+          ///
+          /// Four paths, in order of preference:
+          ///   1. already stored locally — no network call;
+          ///   2. AURA participant id — resolve the existing app_user_id alias;
+          ///   3. known to the backend under this MRN — resolve and store;
+          ///   4. unknown — enrol, store, and hold the pairing code for display.
+          ///
+          /// Enrolling an MRN the backend already knows is safe: it returns the existing
+          /// subject with a fresh pairing code rather than creating a second patient.
+          Future<String> ensureEnrolled({String? clinicianId}) async {
+            if (isEnrolled) return _subjectId!;
+
+            final candidate = mrn.trim().toUpperCase();
+
+            // Patient-first: AURA may already have created the canonical subject.
+            // Resolve that app_user_id alias rather than posting to a second attach API.
+            if (_participantIdPattern.hasMatch(candidate)) {
+              final resolvedByAppId = await _backend.resolveAppUserId(candidate);
+              if (resolvedByAppId != null) {
+                _subjectId = resolvedByAppId;
+                await _linkBehaviouralId(resolvedByAppId);
+                await RecordStore.saveSubjectId(mrn, resolvedByAppId);
+                notifyListeners();
+                return resolvedByAppId;
+              }
+            }
+
+            final resolved = await _backend.resolveMrn(mrn);
+            if (resolved != null) {
+              _subjectId = resolved;
+              await _linkBehaviouralId(resolved);
+              await RecordStore.saveSubjectId(mrn, resolved);
+              notifyListeners();
+              return resolved;
+            }
+
+            final enrolment = await _backend.enrol(
+              mrn: mrn,
+              enrolledBy: clinicianId,
+            );
+            _subjectId = enrolment.subjectId;
+            await _linkBehaviouralId(enrolment.subjectId);
+            _pendingPairing = enrolment;
+            await RecordStore.saveSubjectId(mrn, enrolment.subjectId);
+            notifyListeners();
+            return enrolment.subjectId;
+          }
+          '''
+          if old not in text:
+              raise SystemExit('Expected ensureEnrolled block not found in controllers.dart')
+          controllers.write_text(text.replace(old, new, 1))
+          PY
+      - name: Commit patch
+        run: |
+          git config user.name 'Dulhara Kaushalya'
+          git config user.email '128912391+dulhara79@users.noreply.github.com'
+          git add lib/data/api/gateways.dart lib/state/controllers.dart
+          git diff --cached --check
+          git commit -m 'fix: resolve patient identity without attach route'
+          git push origin HEAD:integration/clinanx-p0-contract-first
