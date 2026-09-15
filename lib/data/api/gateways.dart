@@ -82,25 +82,18 @@ class CentralBackendGateway {
     return EnrolmentResult.fromJson(json);
   }
 
-  /// Attaches a scanned AURA participant id to the subject the patient
-  /// already created via /v1/subjects/self. Returns the subject_id on success,
-  /// null if the backend has no AURA registration for that id (HTTP 404).
-  Future<String?> attach({
-    required String appUserId,
-    String? mrn,
-    String? enrolledBy,
-  }) async {
+  /// Resolves a patient-created AURA participant id through the backend's
+  /// existing `app_user_id` alias contract. This is a read-only lookup: ClinAnx
+  /// does not invent or depend on a separate `/v1/subjects/attach` route.
+  Future<String?> resolveAppUserId(String appUserId) async {
     try {
-      final json = await _api.post(
-          '/v1/subjects/attach',
-          {
-            'app_user_id': appUserId,
-            if (mrn != null && mrn.isNotEmpty) 'mrn': mrn,
-            if (enrolledBy != null && enrolledBy.isNotEmpty)
-              'enrolled_by': enrolledBy,
-          },
-          timeout: Env.quickTimeout);
-      return json['subject_id'] as String?;
+      final json = await _api.get(
+        '/v1/subjects/resolve?app_user_id='
+        '${Uri.encodeQueryComponent(appUserId)}',
+        timeout: Env.quickTimeout,
+      );
+      final id = json['subject_id'];
+      return id == null ? null : '$id';
     } on ApiException catch (e) {
       if (e.kind == ApiFailure.notFound) return null;
       rethrow;
@@ -264,7 +257,6 @@ class CentralBackendGateway {
       return EvidenceResult.failure('$e');
     }
   }
-
 
   /// Records the clinician's tier judgement against a SPECIFIC fusion row.
   ///
