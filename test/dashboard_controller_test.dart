@@ -83,4 +83,35 @@ void main() {
     expect(controller.state.status, AsyncDataStatus.unavailable);
     expect(controller.state.data, isNull);
   });
+
+  test('expired clinician session is explicit and never shown from cache', () async {
+    final repo = _Repository()
+      ..failure = const DashboardSessionExpiredException();
+    final controller = DashboardController(repository: repo);
+
+    await controller.load();
+
+    expect(controller.state.status, AsyncDataStatus.sessionExpired);
+    expect(controller.state.data, isNull);
+  });
+
+  test('forbidden clinician access is distinct from expired session', () async {
+    final repo = _Repository()..failure = const DashboardForbiddenException();
+    final controller = DashboardController(repository: repo);
+
+    await controller.load();
+
+    expect(controller.state.status, AsyncDataStatus.forbidden);
+    expect(controller.state.data, isNull);
+  });
+
+  test('server state conflict is explicit and does not use stale cache', () async {
+    final repo = _Repository()..failure = const DashboardConflictException();
+    final controller = DashboardController(repository: repo);
+
+    await controller.load();
+
+    expect(controller.state.status, AsyncDataStatus.conflict);
+    expect(controller.state.data, isNull);
+  });
 }
