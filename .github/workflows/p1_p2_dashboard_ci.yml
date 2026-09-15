@@ -27,6 +27,7 @@ jobs:
           test/composite_dashboard_repository_test.dart
           test/dashboard_controller_test.dart
           test/dashboard_cache_test.dart
+          test/features/dashboard/server_dashboard_screen_test.dart
       - name: Focused analysis
         run: >-
           flutter analyze
@@ -37,6 +38,7 @@ jobs:
           lib/state/async_data_state.dart
           lib/state/dashboard_controller.dart
           lib/data/api/api_client.dart
+          test/features/dashboard/server_dashboard_screen_test.dart
       - name: Full tests visibility
         if: always()
         continue-on-error: true
