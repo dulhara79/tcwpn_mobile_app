@@ -1,4 +1,5 @@
 import 'package:flutter_test/flutter_test.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 
 import 'package:r26_ds012_app/domain/contracts/dashboard_snapshot.dart';
 import 'package:r26_ds012_app/domain/repositories/dashboard_repository.dart';
@@ -17,6 +18,10 @@ class _Repository implements DashboardRepository {
 }
 
 void main() {
+  setUp(() {
+    SharedPreferences.setMockInitialValues({});
+  });
+
   test('empty server snapshot becomes explicit empty state', () async {
     final repo = _Repository()
       ..value = DashboardSnapshot(
@@ -47,6 +52,25 @@ void main() {
     expect(controller.state.status, AsyncDataStatus.offline);
     expect(controller.state.data, isNotNull);
     expect(controller.state.data!.isFromCache, isTrue);
+  });
+
+  test('offline after controller recreation reloads persisted snapshot', () async {
+    final onlineRepo = _Repository()
+      ..value = DashboardSnapshot(
+        openEvents: const [],
+        assignedPatients: const [],
+        fetchedAt: DateTime.utc(2026, 9, 16),
+      );
+    await DashboardController(repository: onlineRepo).load();
+
+    final offlineRepo = _Repository()
+      ..failure = const DashboardOfflineException();
+    final recreated = DashboardController(repository: offlineRepo);
+    await recreated.load();
+
+    expect(recreated.state.status, AsyncDataStatus.offline);
+    expect(recreated.state.data, isNotNull);
+    expect(recreated.state.data!.isFromCache, isTrue);
   });
 
   test('unavailable source without prior snapshot stays unavailable', () async {
