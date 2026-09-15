@@ -1,12 +1,38 @@
 import '../../core/config/env.dart';
 import '../../domain/contracts/assessment_summary.dart';
 import '../../domain/contracts/attention_event.dart';
+import '../../domain/contracts/clinician_principal.dart';
 import '../../domain/contracts/contract_parsing.dart';
 import '../../domain/contracts/dashboard_snapshot.dart';
 import '../../domain/contracts/patient_summary.dart';
 import '../../domain/repositories/assessment_repository.dart';
+import '../../domain/repositories/auth_repository.dart';
 import '../../domain/repositories/dashboard_repository.dart';
 import '../api/api_client.dart';
+import '../api/session.dart';
+
+class CentralBackendAuthRepository implements AuthRepository {
+  final ApiClient _api;
+
+  CentralBackendAuthRepository([ApiClient? api])
+      : _api = api ?? ApiClient(Env.backendBase);
+
+  @override
+  Future<void> validateCurrentSession() async {
+    final json = await _api.get('/v1/me', timeout: Env.quickTimeout);
+    final principal = ClinicianPrincipal.fromJson(json);
+    if (principal.clinicianId.trim().isEmpty) {
+      throw const ApiException(
+        kind: ApiFailure.malformed,
+        endpoint: '/v1/me',
+        detail: 'Authenticated principal response omitted clinician_id.',
+      );
+    }
+  }
+
+  @override
+  Future<void> expireCurrentSession() => Session.signOut();
+}
 
 class CentralBackendDashboardRepository implements DashboardRepository {
   final ApiClient _api;
