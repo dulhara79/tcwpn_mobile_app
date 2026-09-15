@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 import 'package:r26_ds012_app/domain/contracts/assessment_summary.dart';
 import 'package:r26_ds012_app/domain/contracts/attention_event.dart';
 import 'package:r26_ds012_app/domain/contracts/contract_enums.dart';
@@ -68,6 +69,10 @@ DashboardSnapshot _snapshot({bool cached = false}) => DashboardSnapshot(
     );
 
 void main() {
+  setUp(() {
+    SharedPreferences.setMockInitialValues({});
+  });
+
   testWidgets('renders server attention events before assigned patients',
       (tester) async {
     final controller = DashboardController(
