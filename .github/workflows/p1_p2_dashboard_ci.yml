@@ -1,0 +1,45 @@
+name: P1 P2 dashboard checks
+
+on:
+  push:
+    branches:
+      - integration/clinanx-p1-p2-server-dashboard-impl
+  pull_request:
+    branches:
+      - main
+  workflow_dispatch:
+
+jobs:
+  focused:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: subosito/flutter-action@v2
+        with:
+          channel: stable
+          cache: true
+      - run: flutter pub get
+      - name: Focused tests
+        run: >-
+          flutter test
+          test/contracts
+          test/p1_p2_api_failure_test.dart
+          test/composite_dashboard_repository_test.dart
+          test/dashboard_controller_test.dart
+      - name: Focused analysis
+        run: >-
+          flutter analyze
+          lib/domain/contracts
+          lib/domain/repositories
+          lib/data/repositories
+          lib/state/async_data_state.dart
+          lib/state/dashboard_controller.dart
+          lib/data/api/api_client.dart
+      - name: Full tests visibility
+        if: always()
+        continue-on-error: true
+        run: flutter test
+      - name: Full analysis visibility
+        if: always()
+        continue-on-error: true
+        run: flutter analyze
