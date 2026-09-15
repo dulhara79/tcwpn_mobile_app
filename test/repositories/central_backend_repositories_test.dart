@@ -9,6 +9,28 @@ import 'package:r26_ds012_app/domain/contracts/contract_enums.dart';
 void main() {
   tearDown(Session.clear);
 
+  test('auth repository validates the clinician principal through /v1/me',
+      () async {
+    Session.set(token: 'clinician-jwt', clinicianId: 'DR001');
+    late http.Request sent;
+    final api = ApiClient(
+      'https://backend.test',
+      client: MockClient((request) async {
+        sent = request;
+        return http.Response(
+          '{"clinician_id":"DR001","display_name":"Dr X","role":"clinician"}',
+          200,
+        );
+      }),
+    );
+
+    await CentralBackendAuthRepository(api).validateCurrentSession();
+
+    expect(sent.method, 'GET');
+    expect(sent.url.path, '/v1/me');
+    expect(sent.headers['authorization'], 'Bearer clinician-jwt');
+  });
+
   test('dashboard repository uses clinician JWT and canonical dashboard route',
       () async {
     Session.set(token: 'clinician-jwt', clinicianId: 'DR001');
