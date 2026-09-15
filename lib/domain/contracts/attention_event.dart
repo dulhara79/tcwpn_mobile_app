@@ -53,4 +53,22 @@ class AttentionEvent {
         resolvedBy: contractString(json['resolved_by']),
         policyVersion: contractString(json['policy_version']),
       );
+
+  Map<String, dynamic> toJson() => {
+        'id': id,
+        'subject_id': subjectId,
+        'fusion_result_id': fusionResultId,
+        'forecast_result_id': forecastResultId,
+        'event_type': eventType,
+        'severity': severity.name,
+        'reason': reason,
+        'forecast_horizon': forecastHorizon,
+        'status': status.name.toUpperCase(),
+        'created_at': createdAt?.toUtc().toIso8601String(),
+        'acknowledged_at': acknowledgedAt?.toUtc().toIso8601String(),
+        'acknowledged_by': acknowledgedBy,
+        'resolved_at': resolvedAt?.toUtc().toIso8601String(),
+        'resolved_by': resolvedBy,
+        'policy_version': policyVersion,
+      };
 }

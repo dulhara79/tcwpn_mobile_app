@@ -101,6 +101,7 @@ class AssessmentSummary {
   final CurrentAssessment currentAssessment;
   final ForecastResult? forecast;
   final double? confidence;
+  final double? uncertainty;
   final AssessmentStatus assessmentStatus;
   final List<ModalityStatus> modalities;
   final DateTime? computedAt;
@@ -112,6 +113,7 @@ class AssessmentSummary {
     required this.currentAssessment,
     required this.forecast,
     required this.confidence,
+    required this.uncertainty,
     required this.assessmentStatus,
     required this.modalities,
     required this.computedAt,
@@ -126,7 +128,8 @@ class AssessmentSummary {
       fusionResultId: contractInt(json['fusion_result_id']),
       currentAssessment: CurrentAssessment.fromJson(current),
       forecast: forecast == null ? null : ForecastResult.fromJson(forecast),
-      confidence: contractDouble(json['confidence'] ?? json['uncertainty']),
+      confidence: contractDouble(json['confidence']),
+      uncertainty: contractDouble(json['uncertainty']),
       assessmentStatus: AssessmentStatus.fromWire(json['assessment_status']),
       modalities: contractMapList(json['modalities'])
           .map(ModalityStatus.fromJson)

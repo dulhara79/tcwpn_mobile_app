@@ -16,6 +16,28 @@ void main() {
     expect(result.assessmentStatus, AssessmentStatus.complete);
   });
 
+  test('confidence and uncertainty remain separate semantics', () {
+    final json = loadContractFixture('assessment_complete.json');
+    json['confidence'] = 0.71;
+    json['uncertainty'] = 0.19;
+
+    final result = AssessmentSummary.fromJson(json);
+
+    expect(result.confidence, 0.71);
+    expect(result.uncertainty, 0.19);
+  });
+
+  test('uncertainty is not silently reused as confidence', () {
+    final json = loadContractFixture('assessment_complete.json');
+    json.remove('confidence');
+    json['uncertainty'] = 0.31;
+
+    final result = AssessmentSummary.fromJson(json);
+
+    expect(result.confidence, isNull);
+    expect(result.uncertainty, 0.31);
+  });
+
   test('forecast is a separate physiological object', () {
     final result = AssessmentSummary.fromJson(
       loadContractFixture('assessment_complete.json'),

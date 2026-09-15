@@ -38,4 +38,33 @@ class PatientSummary {
       openEventCount: contractInt(json['open_event_count']),
     );
   }
+
+  Map<String, dynamic> toJson() => {
+        'subject_id': subjectId,
+        'display_id': displayId,
+        'fusion_result_id': fusionResultId,
+        'current_assessment': currentAssessment == null
+            ? null
+            : {
+                'score': currentAssessment!.score,
+                'tier': currentAssessment!.tier.name,
+                'band': currentAssessment!.band,
+              },
+        'forecast': forecast == null
+            ? null
+            : {
+                'forecast_result_id': forecast!.forecastResultId,
+                'scope': forecast!.scope.name,
+                'horizon_minutes': forecast!.horizonMinutes,
+                'score': forecast!.score,
+                'tier': forecast!.tier.name,
+                'escalation_probability': forecast!.escalationProbability,
+                'escalation_predicted': forecast!.escalationPredicted,
+                'generated_at': forecast!.generatedAt?.toUtc().toIso8601String(),
+                'valid_until': forecast!.validUntil?.toUtc().toIso8601String(),
+              },
+        'assessment_status': assessmentStatus.name,
+        'last_updated': lastUpdated?.toUtc().toIso8601String(),
+        'open_event_count': openEventCount,
+      };
 }
