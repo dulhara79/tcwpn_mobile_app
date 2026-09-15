@@ -19,5 +19,10 @@ jobs:
           channel: stable
           cache: true
       - run: flutter pub get
-      - run: flutter test
-      - run: flutter analyze
+      - name: P0 focused tests
+        run: flutter test test/contracts test/gateway_contract_test.dart
+      - name: Full regression suite
+        run: flutter test
+      - name: Static analysis
+        if: always()
+        run: flutter analyze
