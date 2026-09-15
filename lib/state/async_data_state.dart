@@ -6,6 +6,9 @@ enum AsyncDataStatus {
   unavailable,
   offline,
   error,
+  sessionExpired,
+  forbidden,
+  conflict,
 }
 
 class AsyncDataState<T> {
@@ -35,6 +38,15 @@ class AsyncDataState<T> {
 
   const AsyncDataState.error({String? message})
       : this._(AsyncDataStatus.error, message: message);
+
+  const AsyncDataState.sessionExpired({String? message})
+      : this._(AsyncDataStatus.sessionExpired, message: message);
+
+  const AsyncDataState.forbidden({String? message})
+      : this._(AsyncDataStatus.forbidden, message: message);
+
+  const AsyncDataState.conflict({String? message})
+      : this._(AsyncDataStatus.conflict, message: message);
 
   bool get hasData => data != null;
 }
