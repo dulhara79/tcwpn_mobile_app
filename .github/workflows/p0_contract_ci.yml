@@ -1,0 +1,23 @@
+name: ClinAnx P0 contract verification
+
+on:
+  push:
+    branches:
+      - integration/clinanx-p0-contract-first
+  pull_request:
+    branches:
+      - main
+  workflow_dispatch:
+
+jobs:
+  p0-contract:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: subosito/flutter-action@v2
+        with:
+          channel: stable
+          cache: true
+      - run: flutter pub get
+      - run: flutter test
+      - run: flutter analyze
