@@ -83,8 +83,7 @@ class CentralBackendGateway {
   }
 
   /// Resolves a patient-created AURA participant id through the backend's
-  /// existing `app_user_id` alias contract. This is a read-only lookup: ClinAnx
-  /// does not invent or depend on a separate `/v1/subjects/attach` route.
+  /// existing `app_user_id` alias contract.
   Future<String?> resolveAppUserId(String appUserId) async {
     try {
       final json = await _api.get(
@@ -99,6 +98,17 @@ class CentralBackendGateway {
       rethrow;
     }
   }
+
+  /// Temporary source-compatible bridge for ChartController while the client
+  /// call site migrates. It performs only the canonical alias lookup above and
+  /// never posts to a separate attach endpoint.
+  @Deprecated('Use resolveAppUserId')
+  Future<String?> attach({
+    required String appUserId,
+    String? mrn,
+    String? enrolledBy,
+  }) =>
+      resolveAppUserId(appUserId);
 
   /// Resolves an already-enrolled MRN to its subject_id.
   ///
@@ -170,9 +180,6 @@ class CentralBackendGateway {
       'note_date': noteDate.toUtc().toIso8601String(),
       'visit_count': visitCount,
       'support_set': supportSet.map((n) => n.toWire()).toList(),
-      // Ask for the explanation payload. A service that does not implement it
-      // omits the fields and the UI degrades honestly rather than inventing
-      // attention weights.
       'return_attention': true,
       'return_support_contributions': true,
       if (author != null && author.isNotEmpty) 'author': author,
@@ -186,18 +193,12 @@ class CentralBackendGateway {
 
   // ── Fusion and egress ─────────────────────────────────────────────────────
 
-  /// Re-runs fusion over the stored readings. Does not call any component
-  /// service — it re-derives the composite from what is already persisted.
   Future<void> runFusion(String subjectId, {String trigger = 'manual'}) =>
       _api.post('/v1/fusion/run', {
         'subject_id': subjectId,
         'trigger': trigger,
       });
 
-  /// The clinician view: composite, per-modality readings with freshness and
-  /// status, the gate decision, the conformal set, and the trend history.
-  ///
-  /// Returns null only when the backend has no such subject.
   Future<FusionResult?> timeline({
     required String subjectId,
     required String mrn,
@@ -215,8 +216,6 @@ class CentralBackendGateway {
     }
   }
 
-  /// CARE-AnxRAG decision support. The backend forwards no patient data into
-  /// the RAG call; subject_id is used for auth and audit only.
   Future<Map<String, dynamic>> evidence({
     required String subjectId,
     required String question,
@@ -225,20 +224,6 @@ class CentralBackendGateway {
         'question': question,
       });
 
-  /// Global CARE-AnxRAG query - not scoped to any patient.
-  ///
-  /// Backs the Ask CARE tab, where a clinician asks a knowledge-base question
-  /// without first selecting a patient. Hits POST /v1/evidence/ask.
-  ///
-  /// The timeout is inferenceTimeout (180s), not quickTimeout: CARE-AnxRAG
-  /// generates locally through Ollama and a real answer has been measured at
-  /// ~58s, so a 25s limit would report "unavailable" for a service that was
-  /// working correctly.
-  ///
-  /// Transport failures become an `unavailable` result rather than an
-  /// exception, so the screen can tell "could not reach the service" apart
-  /// from "the service declined to answer" without either being mistaken for
-  /// an answer.
   Future<EvidenceResult> askEvidence(String question) async {
     final trimmed = question.trim();
     if (trimmed.isEmpty) {
@@ -258,17 +243,9 @@ class CentralBackendGateway {
     }
   }
 
-  /// Records the clinician's tier judgement against a SPECIFIC fusion row.
-  ///
-  /// Two ordering rules, both from the backend's own docstring, and both the
-  /// UI's responsibility to enforce:
-  ///   • the verdict must be entered BEFORE the conformal set is shown, or the
-  ///     label is contaminated by the prediction it exists to calibrate;
-  ///   • `fusionResultId` must be the id of the row the clinician actually
-  ///     looked at, not the latest one.
   Future<Map<String, dynamic>> submitVerdict({
     required int fusionResultId,
-    required String tierLabel, // 'Low' | 'Medium' | 'High'
+    required String tierLabel,
     String? author,
     String? note,
   }) =>
@@ -289,9 +266,6 @@ class CentralBackendGateway {
 // TC-WPN — warm-up only
 // ─────────────────────────────────────────────────────────────────────────────
 
-/// Wakes a sleeping Space and reports model metadata, so the first real
-/// analysis does not pay the full cold-start. This is the ONLY call this app
-/// makes to the Space; inference goes through the Central Backend.
 class TcwpnWarmupGateway {
   final ApiClient _api;
   TcwpnWarmupGateway([ApiClient? api]) : _api = api ?? ApiClient(Env.tcwpnBase);
