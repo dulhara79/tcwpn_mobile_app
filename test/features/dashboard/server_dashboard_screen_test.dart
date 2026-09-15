@@ -84,13 +84,13 @@ void main() {
       MaterialApp(home: ServerDashboardScreen(controller: controller)),
     );
 
-    expect(find.text('Needs attention'), findsOneWidget);
-    expect(find.text('Assigned patients'), findsOneWidget);
+    expect(find.text('NEEDS ATTENTION'), findsOneWidget);
+    expect(find.text('ASSIGNED PATIENTS'), findsOneWidget);
     expect(find.text('evt-001'), findsOneWidget);
     expect(find.text('Patient A'), findsOneWidget);
 
-    final attentionY = tester.getTopLeft(find.text('Needs attention')).dy;
-    final patientsY = tester.getTopLeft(find.text('Assigned patients')).dy;
+    final attentionY = tester.getTopLeft(find.text('NEEDS ATTENTION')).dy;
+    final patientsY = tester.getTopLeft(find.text('ASSIGNED PATIENTS')).dy;
     expect(attentionY, lessThan(patientsY));
   });
 

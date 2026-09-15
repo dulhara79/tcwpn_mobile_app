@@ -44,10 +44,10 @@ class CentralBackendGateway {
       : _api = api ??
             ApiClient(
               Env.backendBase,
-              // The backend checks a single shared token (main.py::_auth), not
-              // the clinician's session JWT. Sending the JWT here yields 401 on
-              // every call. Clinician identity travels in the body's `author`
-              // field instead — a documented prototype limitation, not a design.
+              // Legacy backend operations still use the shared prototype token.
+              // Clinician-scoped target reads are implemented through a separate
+              // session-JWT client so this compatibility path can be retired
+              // without breaking note ingestion while the backend migrates.
               bearer: () => Env.backendToken,
             );
 
@@ -61,12 +61,6 @@ class CentralBackendGateway {
 
   // ── Enrolment ─────────────────────────────────────────────────────────────
 
-  /// Enrols a patient by MRN. The backend HMAC-hashes it on arrival and never
-  /// persists the raw value; what comes back is an opaque `subject_id` plus a
-  /// pairing code for the patient app.
-  ///
-  /// Re-enrolling a known MRN is safe: the backend returns the existing subject
-  /// with a fresh code rather than creating a duplicate patient.
   Future<EnrolmentResult> enrol({
     required String mrn,
     String? enrolledBy,
@@ -82,8 +76,6 @@ class CentralBackendGateway {
     return EnrolmentResult.fromJson(json);
   }
 
-  /// Resolves a patient-created AURA participant id through the backend's
-  /// existing `app_user_id` alias contract.
   Future<String?> resolveAppUserId(String appUserId) async {
     try {
       final json = await _api.get(
@@ -99,25 +91,6 @@ class CentralBackendGateway {
     }
   }
 
-  /// Temporary source-compatible bridge for ChartController while the client
-  /// call site migrates. It performs only the canonical alias lookup above and
-  /// never posts to a separate attach endpoint.
-  @Deprecated('Use resolveAppUserId')
-  Future<String?> attach({
-    required String appUserId,
-    String? mrn,
-    String? enrolledBy,
-  }) =>
-      resolveAppUserId(appUserId);
-
-  /// Resolves an already-enrolled MRN to its subject_id.
-  ///
-  /// Returns null when the backend has never seen this MRN — a normal state for
-  /// a patient added to the local roster but not yet enrolled, not an error.
-  ///
-  /// Note that this sends the raw MRN over the wire so the server can hash it
-  /// with its pepper; the app cannot compute the hash itself. Keep it to HTTPS,
-  /// and prefer the stored subject_id for everything afterwards.
   Future<String?> resolveMrn(String mrn) async {
     try {
       final json = await _api.get(
@@ -132,13 +105,6 @@ class CentralBackendGateway {
     }
   }
 
-  /// Registers the id a component service knows this patient by, so the backend
-  /// does not ask C2 about a UUID C2 has never heard of.
-  ///
-  /// `modality` must be one of `c1_physiological`, `c2_behavioral`,
-  /// `c3_clinical_nlp`. Idempotent per modality; the backend returns 409 if that
-  /// external id already belongs to a different subject, which is a real
-  /// cross-patient error and must surface, not be swallowed.
   Future<void> registerExternalId({
     required String subjectId,
     required String modality,
@@ -154,15 +120,6 @@ class CentralBackendGateway {
 
   // ── Clinical note ─────────────────────────────────────────────────────────
 
-  /// Submits one clinical note.
-  ///
-  /// Server-side this single call runs TC-WPN, stores the reading, and triggers
-  /// fusion. The support set is sent with per-note dates because TC-WPN's
-  /// temporal weighting and its visit-regularity term are computed from them
-  /// server-side; the client must not pre-weight anything.
-  ///
-  /// `author` is the clinician id. It is the only clinician attribution the
-  /// backend receives, because the transport token is a shared app credential.
   Future<ClinicalNoteIngestResult> submitNote({
     required String subjectId,
     required String noteText,

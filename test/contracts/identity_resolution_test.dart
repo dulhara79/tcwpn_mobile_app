@@ -21,7 +21,7 @@ CentralBackendGateway _gateway(List<http.Request> sent) =>
     );
 
 void main() {
-  test('Aura participant id resolves through the existing backend alias route',
+  test('Aura participant id resolves through the canonical backend alias route',
       () async {
     final sent = <http.Request>[];
     final gateway = _gateway(sent);
@@ -53,29 +53,12 @@ void main() {
     );
   });
 
-  test('legacy controller call is bridged to the same canonical GET route',
-      () async {
-    final sent = <http.Request>[];
-    final gateway = _gateway(sent);
-
-    // ignore: deprecated_member_use_from_same_package
-    final id = await gateway.attach(
-      appUserId: 'P_65DC4002E7863773',
-      mrn: 'P_65DC4002E7863773',
-      enrolledBy: 'DR001',
-    );
-
-    expect(id, 'subject-aura-001');
-    expect(sent.single.method, 'GET');
-    expect(sent.single.url.path, '/v1/subjects/resolve');
-    expect(sent.single.url.queryParameters['app_user_id'], 'P_65DC4002E7863773');
-  });
-
-  test('gateway source contains no non-existent attach endpoint', () {
+  test('gateway source contains no attach compatibility route or method', () {
     final gatewaySource =
         File('lib/data/api/gateways.dart').readAsStringSync();
 
     expect(gatewaySource, isNot(contains('/v1/subjects/attach')));
+    expect(gatewaySource, isNot(contains('Future<String?> attach(')));
     expect(gatewaySource, contains('resolveAppUserId'));
   });
 }
