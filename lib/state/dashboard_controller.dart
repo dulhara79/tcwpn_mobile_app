@@ -33,6 +33,18 @@ class DashboardController extends ChangeNotifier {
       _state = snapshot.isEmpty
           ? const AsyncDataState<DashboardSnapshot>.empty()
           : AsyncDataState<DashboardSnapshot>.data(snapshot);
+    } on DashboardSessionExpiredException catch (e) {
+      _state = AsyncDataState<DashboardSnapshot>.sessionExpired(
+        message: e.message,
+      );
+    } on DashboardForbiddenException catch (e) {
+      _state = AsyncDataState<DashboardSnapshot>.forbidden(
+        message: e.message,
+      );
+    } on DashboardConflictException catch (e) {
+      _state = AsyncDataState<DashboardSnapshot>.conflict(
+        message: e.message,
+      );
     } on DashboardOfflineException catch (e) {
       final cached = await _cachedSnapshot();
       _state = AsyncDataState<DashboardSnapshot>.offline(
@@ -64,6 +76,29 @@ class DashboardController extends ChangeNotifier {
     if (inMemory != null) return inMemory.asCached();
     return cache.load();
   }
+}
+
+class DashboardSessionExpiredException implements Exception {
+  final String message;
+  const DashboardSessionExpiredException([
+    this.message = 'Your clinician session has expired. Please sign in again.',
+  ]);
+}
+
+class DashboardForbiddenException implements Exception {
+  final String message;
+  const DashboardForbiddenException([
+    this.message =
+        'You are signed in, but you do not have permission to access this dashboard data.',
+  ]);
+}
+
+class DashboardConflictException implements Exception {
+  final String message;
+  const DashboardConflictException([
+    this.message =
+        'The server state changed. Refresh to load the current dashboard state.',
+  ]);
 }
 
 class DashboardOfflineException implements Exception {
