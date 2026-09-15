@@ -1,13 +1,13 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
-import 'package:tcwpn_mobile_app/domain/contracts/assessment_summary.dart';
-import 'package:tcwpn_mobile_app/domain/contracts/attention_event.dart';
-import 'package:tcwpn_mobile_app/domain/contracts/contract_enums.dart';
-import 'package:tcwpn_mobile_app/domain/contracts/dashboard_snapshot.dart';
-import 'package:tcwpn_mobile_app/domain/contracts/patient_summary.dart';
-import 'package:tcwpn_mobile_app/domain/repositories/dashboard_repository.dart';
-import 'package:tcwpn_mobile_app/features/dashboard/server_dashboard_screen.dart';
-import 'package:tcwpn_mobile_app/state/dashboard_controller.dart';
+import 'package:r26_ds012_app/domain/contracts/assessment_summary.dart';
+import 'package:r26_ds012_app/domain/contracts/attention_event.dart';
+import 'package:r26_ds012_app/domain/contracts/contract_enums.dart';
+import 'package:r26_ds012_app/domain/contracts/dashboard_snapshot.dart';
+import 'package:r26_ds012_app/domain/contracts/patient_summary.dart';
+import 'package:r26_ds012_app/domain/repositories/dashboard_repository.dart';
+import 'package:r26_ds012_app/features/dashboard/server_dashboard_screen.dart';
+import 'package:r26_ds012_app/state/dashboard_controller.dart';
 
 class _FakeDashboardRepository implements DashboardRepository {
   final DashboardSnapshot snapshot;
