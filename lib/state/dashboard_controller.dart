@@ -1,13 +1,18 @@
 import 'package:flutter/foundation.dart';
 
+import '../data/local/dashboard_cache.dart';
 import '../domain/contracts/dashboard_snapshot.dart';
 import '../domain/repositories/dashboard_repository.dart';
 import 'async_data_state.dart';
 
 class DashboardController extends ChangeNotifier {
   final DashboardRepository repository;
+  final DashboardCacheStore cache;
 
-  DashboardController({required this.repository});
+  DashboardController({
+    required this.repository,
+    DashboardCacheStore? cache,
+  }) : cache = cache ?? const DashboardCacheStore();
 
   AsyncDataState<DashboardSnapshot> _state =
       const AsyncDataState<DashboardSnapshot>.loading();
@@ -24,11 +29,12 @@ class DashboardController extends ChangeNotifier {
     try {
       final snapshot = await repository.loadDashboard();
       _lastSuccessful = snapshot;
+      await cache.save(snapshot);
       _state = snapshot.isEmpty
           ? const AsyncDataState<DashboardSnapshot>.empty()
           : AsyncDataState<DashboardSnapshot>.data(snapshot);
     } on DashboardOfflineException catch (e) {
-      final cached = _lastSuccessful?.asCached();
+      final cached = await _cachedSnapshot();
       _state = AsyncDataState<DashboardSnapshot>.offline(
         cached: cached,
         message: cached == null
@@ -36,7 +42,7 @@ class DashboardController extends ChangeNotifier {
             : 'Offline. Showing the last server-provided dashboard snapshot.',
       );
     } on DashboardUnavailableException catch (e) {
-      final cached = _lastSuccessful?.asCached();
+      final cached = await _cachedSnapshot();
       _state = cached == null
           ? AsyncDataState<DashboardSnapshot>.unavailable(message: e.message)
           : AsyncDataState<DashboardSnapshot>.partial(
@@ -51,6 +57,12 @@ class DashboardController extends ChangeNotifier {
     }
 
     notifyListeners();
+  }
+
+  Future<DashboardSnapshot?> _cachedSnapshot() async {
+    final inMemory = _lastSuccessful;
+    if (inMemory != null) return inMemory.asCached();
+    return cache.load();
   }
 }
 
