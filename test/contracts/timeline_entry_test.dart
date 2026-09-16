@@ -19,7 +19,10 @@ void main() {
     expect(entry.band, 'AMBER');
     expect(entry.assessmentStatus, 'complete');
     expect(entry.missingModalities, ['c2_behavioral']);
-    expect(entry.computedAt, DateTime.utc(2026, 9, 16, 8));
+    expect(
+      entry.computedAt?.toUtc(),
+      DateTime.utc(2026, 9, 16, 8),
+    );
     expect(entry.trigger, 'note-ingest');
   });
 
