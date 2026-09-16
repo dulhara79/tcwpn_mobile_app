@@ -39,6 +39,8 @@ jobs:
           test/p5a_assessment_authority_test.dart
           test/p5b_timeline_clinical_notes_authority_test.dart
           test/p6_notification_authority_test.dart
+          test/attention_notification_controller_test.dart
+          test/attention_notification_store_test.dart
           test/composite_dashboard_repository_test.dart
           test/dashboard_controller_test.dart
           test/dashboard_cache_test.dart
@@ -57,10 +59,13 @@ jobs:
       - name: Focused analysis
         run: >-
           flutter analyze
+          lib/main.dart
+          lib/core/notifications
           lib/domain/contracts
           lib/domain/repositories
           lib/data/repositories
           lib/data/local/dashboard_cache.dart
+          lib/data/local/attention_notification_store.dart
           lib/state/async_data_state.dart
           lib/state/dashboard_controller.dart
           lib/state/patient_overview_controller.dart
@@ -70,6 +75,7 @@ jobs:
           lib/state/clinician_assessment_controller.dart
           lib/state/attention_events_controller.dart
           lib/state/attention_event_detail_controller.dart
+          lib/state/attention_notification_controller.dart
           lib/state/controllers.dart
           lib/data/api/api_client.dart
           lib/data/api/gateways.dart
@@ -92,6 +98,8 @@ jobs:
           test/p5a_assessment_authority_test.dart
           test/p5b_timeline_clinical_notes_authority_test.dart
           test/p6_notification_authority_test.dart
+          test/attention_notification_controller_test.dart
+          test/attention_notification_store_test.dart
           test/patient_overview_controller_test.dart
           test/timeline_controller_test.dart
           test/clinical_notes_controller_test.dart
@@ -111,35 +119,42 @@ jobs:
             echo 'Forbidden retired authority/compatibility path found in active Dart.'
             exit 1
           fi
-          if grep -R -nE 'AlertBandX\\.fromScore' lib/features/dashboard lib/features/patients/patient_overview_screen.dart lib/features/attention_events --include='*.dart' 2>/dev/null; then
+          if grep -R -nE 'AlertBandX\.fromScore' lib/features/dashboard lib/features/patients/patient_overview_screen.dart lib/features/attention_events --include='*.dart' 2>/dev/null; then
             echo 'Server-backed clinician views must not derive authoritative risk locally.'
             exit 1
           fi
-          if grep -R -nE "['\\\"]/?predict['\\\"]" lib/features/patients/patient_overview_screen.dart lib/state/patient_overview_controller.dart lib/features/attention_events lib/state/attention_event_detail_controller.dart 2>/dev/null; then
+          if grep -R -nE "['\"]/?predict['\"]" lib/features/patients/patient_overview_screen.dart lib/state/patient_overview_controller.dart lib/features/attention_events lib/state/attention_event_detail_controller.dart 2>/dev/null; then
             echo 'Clinician event flows must not call model prediction directly.'
             exit 1
           fi
-          if grep -nE "'/v1/me'|'/v1/clinicians/me/dashboard'|/assessment/latest'|['\\\"]/attention-events|['\\\"]/acknowledge|['\\\"]/resolve" lib/data/repositories/central_backend_repositories.dart; then
+          if grep -nE "'/v1/me'|'/v1/clinicians/me/dashboard'|/assessment/latest'|['\"]/attention-events|['\"]/acknowledge|['\"]/resolve" lib/data/repositories/central_backend_repositories.dart; then
             echo 'Unverified target endpoint was live-wired.'
             exit 1
           fi
-          if grep -n 'roster\\.unacknowledgedCount' lib/features/shell.dart; then
+          if grep -n 'roster\.unacknowledgedCount' lib/features/shell.dart; then
             echo 'P4 Activity count must not use legacy local alert authority.'
             exit 1
           fi
-          if grep -R -nE "['\\\"]/?predict['\\\"]|/contributions|/data-quality|AlertBandX\\.fromScore" \\
-            lib/features/patients/signals_contributions_screen.dart \\
+          if grep -R -nE "['\"]/?predict['\"]|/contributions|/data-quality|AlertBandX\.fromScore" \
+            lib/features/patients/signals_contributions_screen.dart \
             lib/features/patients/data_quality_screen.dart 2>/dev/null; then
             echo 'P5A deep views must not call models, guess routes, or derive risk locally.'
             exit 1
           fi
-          if grep -R -nE "['\\\"]/?predict['\\\"]|/clinical-notes/history|/notes/history|AlertBandX\\.fromScore|weight \\* score|largest weight" \\
-            lib/data/repositories/p5b_repositories.dart \\
-            lib/state/timeline_controller.dart \\
-            lib/state/clinical_notes_controller.dart \\
-            lib/features/patients/timeline_screen.dart \\
+          if grep -R -nE "['\"]/?predict['\"]|/clinical-notes/history|/notes/history|AlertBandX\.fromScore|weight \* score|largest weight" \
+            lib/data/repositories/p5b_repositories.dart \
+            lib/state/timeline_controller.dart \
+            lib/state/clinical_notes_controller.dart \
+            lib/features/patients/timeline_screen.dart \
             lib/features/patients/clinical_notes_screen.dart 2>/dev/null; then
             echo 'P5B must not call models directly, guess note-history routes, or derive clinical authority locally.'
+            exit 1
+          fi
+          if grep -R -nE 'ClinicalAlert\(|AlertBandX\.fromScore|current_score|forecast_score|acknowledged_by|resolved_by' \
+            lib/core/notifications \
+            lib/data/local/attention_notification_store.dart \
+            lib/state/attention_notification_controller.dart 2>/dev/null; then
+            echo 'P6 notification delivery must not manufacture clinical authority.'
             exit 1
           fi
       - name: Full tests visibility
