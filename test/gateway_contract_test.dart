@@ -130,6 +130,7 @@ String _timelineWithExperimentalC2() => jsonEncode({
 void main() {
   setUp(sent.clear);
 
+  // ───────────────────────────────────────────────────────────────────────────
   group('the app talks to the Central Backend and nothing else', () {
     test('a note goes to /v1/clinical-notes, not to a model service', () async {
       final g = _gateway(
@@ -151,6 +152,7 @@ void main() {
 
       expect(sent.single.url.toString(), '$_base/v1/clinical-notes');
       expect(sent.single.method, 'POST');
+      // The retired direct-inference paths, asserted by absence.
       expect(sent.single.url.path, isNot(contains('/predict')));
       expect(sent.single.url.path, isNot(contains('/fuse')));
       expect(sent.single.url.path, isNot(contains('/v3/risk/classify')));
@@ -185,40 +187,51 @@ void main() {
       final body = _bodyOf(sent.single);
       expect(body['subject_id'], 'S1');
       expect(body['support_set'], hasLength(1));
+      // Temporal weighting is TC-WPN's job, server-side. If the client ever
+      // starts pre-weighting the support set, the model is scoring something
+      // the paper did not describe.
       expect((body['support_set'] as List).first, isNot(contains('weight')));
       expect(body.containsKey('weights'), isFalse);
       expect(body.containsKey('composite'), isFalse);
       expect(body.containsKey('composite_score'), isFalse);
     });
 
-    test('enrolment sends the MRN once and the app keeps the subject_id', () async {
-      final g = _gateway(
-        (_) async => http.Response(
-          jsonEncode({
-            'subject_id': 'b40cd9ba-c1e6-4f82-9cfd-41a2548de884',
-            'pairing_code': '419-330',
-          }),
-          200,
-        ),
-      );
+    test(
+      'enrolment sends the MRN once and the app keeps the subject_id',
+      () async {
+        final g = _gateway(
+          (_) async => http.Response(
+            jsonEncode({
+              'subject_id': 'b40cd9ba-c1e6-4f82-9cfd-41a2548de884',
+              'pairing_code': '419-330',
+            }),
+            200,
+          ),
+        );
 
-      final r = await g.enrol(mrn: 'S-000123', enrolledBy: 'dr-dulhara');
+        final r = await g.enrol(mrn: 'S-000123', enrolledBy: 'dr-dulhara');
 
-      expect(sent.single.url.toString(), '$_base/v1/subjects');
-      expect(_bodyOf(sent.single)['mrn'], 'S-000123');
-      expect(r.subjectId, 'b40cd9ba-c1e6-4f82-9cfd-41a2548de884');
-      expect(r.pairingCode, '419-330');
-    });
+        expect(sent.single.url.toString(), '$_base/v1/subjects');
+        expect(_bodyOf(sent.single)['mrn'], 'S-000123');
+        expect(r.subjectId, 'b40cd9ba-c1e6-4f82-9cfd-41a2548de884');
+        expect(r.pairingCode, '419-330');
+      },
+    );
 
-    test('a verdict is bound to the fusion row the clinician looked at', () async {
-      final g = _gateway((_) async => http.Response('{"ok":true}', 200));
-      await g.submitVerdict(fusionResultId: 7, tierLabel: 'Medium');
+    test(
+      'a verdict is bound to the fusion row the clinician looked at',
+      () async {
+        final g = _gateway((_) async => http.Response('{"ok":true}', 200));
+        await g.submitVerdict(fusionResultId: 7, tierLabel: 'Medium');
 
-      final body = _bodyOf(sent.single);
-      expect(sent.single.url.toString(), '$_base/v1/verdict');
-      expect(body['fusion_result_id'], 7);
-      expect(body['tier_label'], 'Medium');
-    });
+        final body = _bodyOf(sent.single);
+        expect(sent.single.url.toString(), '$_base/v1/verdict');
+        // Not "the latest row" — a specific id, or the label is attached to a
+        // prediction the clinician never saw.
+        expect(body['fusion_result_id'], 7);
+        expect(body['tier_label'], 'Medium');
+      },
+    );
 
     test('the TC-WPN Space is only ever asked for /health', () async {
       final calls = <Uri>[];
@@ -233,12 +246,17 @@ void main() {
       );
 
       await warm.health();
+
+      // hasTcwpnWarmup is false unless TCWPN_BASE was defined at build time, in
+      // which case health() short-circuits and never reaches the transport.
+      // Either way the assertion that matters holds: nothing but /health.
       for (final u in calls) {
         expect(u.path, '/health');
       }
     });
   });
 
+  // ───────────────────────────────────────────────────────────────────────────
   group('a failed call is an error, never a score', () {
     test('400 surfaces as validation', () async {
       await expectLater(
@@ -291,20 +309,26 @@ void main() {
       );
     });
 
-    test('403 surfaces as forbidden, distinct from expired identity', () async {
-      await expectLater(
-        _failing(403).timeline(subjectId: 'S1', mrn: 'S-000123'),
-        throwsA(
-          isA<ApiException>().having(
-            (e) => e.kind,
-            'kind',
-            ApiFailure.forbidden,
+    test(
+      '403 surfaces as forbidden, distinct from expired identity',
+      () async {
+        await expectLater(
+          _failing(403).timeline(subjectId: 'S1', mrn: 'S-000123'),
+          throwsA(
+            isA<ApiException>().having(
+              (e) => e.kind,
+              'kind',
+              ApiFailure.forbidden,
+            ),
           ),
-        ),
-      );
-    });
+        );
+      },
+    );
 
     test('500 throws rather than returning a default FusionResult', () async {
+      // The whole point. A default-constructed FusionResult would render as a
+      // composite of 0.000 — "Stable" — for a patient the server refused to
+      // assess.
       await expectLater(
         _failing(500).timeline(subjectId: 'S1', mrn: 'S-000123'),
         throwsA(
@@ -320,16 +344,24 @@ void main() {
       );
     });
 
-    test('an unknown subject is null, which is a state — not an exception', () async {
-      final r = await _failing(404).timeline(subjectId: 'S1', mrn: 'S-000123');
-      expect(r, isNull);
-    });
+    test(
+      'an unknown subject is null, which is a state — not an exception',
+      () async {
+        final r = await _failing(
+          404,
+        ).timeline(subjectId: 'S1', mrn: 'S-000123');
+        expect(r, isNull);
+      },
+    );
 
     test('resolveMrn returns null for an unenrolled MRN', () async {
       expect(await _failing(404).resolveMrn('S-000999'), isNull);
     });
 
     test('a 409 on external-id linking is NOT swallowed', () async {
+      // 409 means this external id already belongs to a DIFFERENT subject —
+      // a cross-patient error. Swallowing it wires one patient's wearable to
+      // another patient's chart.
       await expectLater(
         _failing(409).registerExternalId(
           subjectId: 'S1',
@@ -371,27 +403,33 @@ void main() {
       );
     });
 
-    test('an HTML error page is malformed, not a FormatException crash', () async {
-      final g = _gateway(
-        (_) async => http.Response('<html>502 Bad Gateway</html>', 200),
-      );
-      await expectLater(
-        g.timeline(subjectId: 'S1', mrn: 'S-000123'),
-        throwsA(
-          isA<ApiException>().having(
-            (e) => e.kind,
-            'kind',
-            ApiFailure.malformed,
+    test(
+      'an HTML error page is malformed, not a FormatException crash',
+      () async {
+        final g = _gateway(
+          (_) async => http.Response('<html>502 Bad Gateway</html>', 200),
+        );
+        await expectLater(
+          g.timeline(subjectId: 'S1', mrn: 'S-000123'),
+          throwsA(
+            isA<ApiException>().having(
+              (e) => e.kind,
+              'kind',
+              ApiFailure.malformed,
+            ),
           ),
-        ),
-      );
-    });
+        );
+      },
+    );
 
     test('health() degrades to null rather than blocking the app', () async {
+      // The one place swallowing is right: a health probe is decoration, and a
+      // dead probe must not stop a clinician opening a chart.
       expect(await _failing(500).health(), isNull);
     });
   });
 
+  // ───────────────────────────────────────────────────────────────────────────
   group('an experimental behavioural score never reaches the composite', () {
     late FusionResult r;
 
@@ -433,6 +471,9 @@ void main() {
 
     test('contributions are read, not recomputed as weight x score', () {
       final c1 = c(Modality.c1Physiological);
+      // 0.61 * 0.4812 = 0.29353..., the server says 0.2935 — close here, but
+      // the client must not be the one deciding that. Harmonisation happens
+      // server-side and the two diverge as soon as it does anything.
       expect(c1.contribution, closeTo(0.2935, 1e-9));
     });
 
@@ -449,27 +490,34 @@ void main() {
     });
   });
 
+  // ───────────────────────────────────────────────────────────────────────────
   group('CARE-AnxRAG', () {
-    test('guidance is requested through the backend, not a RAG service', () async {
-      final g = _gateway(
-        (_) async => http.Response(
-          jsonEncode({
-            'answer': 'Consider structured GAD-7 follow-up within two weeks.',
-            'citations': [
-              {'source': 'NICE CG113', 'section': '1.2.8'},
-            ],
-            'abstained': false,
-          }),
-          200,
-        ),
-      );
+    test(
+      'guidance is requested through the backend, not a RAG service',
+      () async {
+        final g = _gateway(
+          (_) async => http.Response(
+            jsonEncode({
+              'answer': 'Consider structured GAD-7 follow-up within two weeks.',
+              'citations': [
+                {'source': 'NICE CG113', 'section': '1.2.8'},
+              ],
+              'abstained': false,
+            }),
+            200,
+          ),
+        );
 
-      final r = await g.evidence(subjectId: 'S1', question: 'next steps?');
+        final r = await g.evidence(subjectId: 'S1', question: 'next steps?');
 
-      expect(sent.single.url.toString(), '$_base/v1/doctor/patients/S1/evidence');
-      expect(r['abstained'], isFalse);
-      expect(r['citations'], hasLength(1));
-    });
+        expect(
+          sent.single.url.toString(),
+          '$_base/v1/doctor/patients/S1/evidence',
+        );
+        expect(r['abstained'], isFalse);
+        expect(r['citations'], hasLength(1));
+      },
+    );
 
     test('an abstention is passed through, not turned into advice', () async {
       final g = _gateway(
@@ -491,11 +539,14 @@ void main() {
       expect(r['reason'], contains('insufficient'));
     });
 
-    test('an unavailable RAG backend throws instead of returning silence', () async {
-      await expectLater(
-        _failing(503).evidence(subjectId: 'S1', question: 'next steps?'),
-        throwsA(isA<ApiException>()),
-      );
-    });
+    test(
+      'an unavailable RAG backend throws instead of returning silence',
+      () async {
+        await expectLater(
+          _failing(503).evidence(subjectId: 'S1', question: 'next steps?'),
+          throwsA(isA<ApiException>()),
+        );
+      },
+    );
   });
 }
