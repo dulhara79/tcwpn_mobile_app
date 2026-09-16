@@ -5,13 +5,10 @@
 // from the Central Backend; this shell never recalculates patient risk.
 
 import 'package:flutter/material.dart';
-import 'package:provider/provider.dart';
 
-import '../core/design/tokens.dart';
 import '../data/repositories/central_backend_repositories.dart';
-import '../state/controllers.dart';
 import '../state/dashboard_controller.dart';
-import 'alerts/alerts_screen.dart';
+import 'attention_events/activity_screen.dart';
 import 'dashboard/server_dashboard_screen.dart';
 import 'evidence/ask_care_screen.dart';
 import 'patients/patients_screen.dart';
@@ -59,15 +56,13 @@ class _AppShellState extends State<AppShell> {
 
   @override
   Widget build(BuildContext context) {
-    final roster = context.watch<RosterController>();
-
     return Scaffold(
       body: IndexedStack(
         index: _tab,
         children: [
           ServerDashboardScreen(controller: _dashboardController),
           const PatientsScreen(),
-          const AlertsScreen(),
+          const ActivityScreen.production(),
           const SettingsScreen(),
           const AskCareScreen(),
         ],
@@ -75,33 +70,28 @@ class _AppShellState extends State<AppShell> {
       bottomNavigationBar: NavigationBar(
         selectedIndex: _tab,
         onDestinationSelected: (i) => setState(() => _tab = i),
-        destinations: [
-          const NavigationDestination(
+        destinations: const [
+          NavigationDestination(
             icon: Icon(Icons.dashboard_outlined),
             selectedIcon: Icon(Icons.dashboard_rounded),
             label: 'Dashboard',
           ),
-          const NavigationDestination(
+          NavigationDestination(
             icon: Icon(Icons.folder_shared_outlined),
             selectedIcon: Icon(Icons.folder_shared_rounded),
             label: 'Patients',
           ),
           NavigationDestination(
-            icon: Badge(
-              isLabelVisible: roster.unacknowledgedCount > 0,
-              label: Text('${roster.unacknowledgedCount}'),
-              backgroundColor: Ds.red,
-              child: const Icon(Icons.notifications_none_rounded),
-            ),
-            selectedIcon: const Icon(Icons.notifications_rounded),
-            label: 'Alerts',
+            icon: Icon(Icons.notifications_none_rounded),
+            selectedIcon: Icon(Icons.notifications_rounded),
+            label: 'Activity',
           ),
-          const NavigationDestination(
+          NavigationDestination(
             icon: Icon(Icons.tune_outlined),
             selectedIcon: Icon(Icons.tune_rounded),
             label: 'Settings',
           ),
-          const NavigationDestination(
+          NavigationDestination(
             icon: Icon(Icons.psychology_outlined),
             selectedIcon: Icon(Icons.psychology),
             label: 'Ask CARE',
