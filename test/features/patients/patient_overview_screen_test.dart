@@ -24,10 +24,7 @@ class _OverviewHarness {
   final _Repository repository;
   final PatientOverviewController controller;
 
-  const _OverviewHarness({
-    required this.repository,
-    required this.controller,
-  });
+  const _OverviewHarness({required this.repository, required this.controller});
 }
 
 AssessmentSummary _completeAssessment() => AssessmentSummary(
@@ -107,6 +104,9 @@ Future<_OverviewHarness> _pumpOverview(
   AssessmentSummary? assessment, {
   ValueChanged<AssessmentSummary>? onOpenSignalsContributions,
   ValueChanged<AssessmentSummary>? onOpenDataQuality,
+  ValueChanged<String>? onOpenTimeline,
+  void Function(String subjectId, String localRecordId)? onOpenClinicalNotes,
+  String localRecordId = 'MRN-001',
 }) async {
   final repository = _Repository(assessment);
   final controller = PatientOverviewController(
@@ -119,9 +119,12 @@ Future<_OverviewHarness> _pumpOverview(
     MaterialApp(
       home: PatientOverviewScreen(
         displayId: 'Patient A',
+        localRecordId: localRecordId,
         controller: controller,
         onOpenSignalsContributions: onOpenSignalsContributions,
         onOpenDataQuality: onOpenDataQuality,
+        onOpenTimeline: onOpenTimeline,
+        onOpenClinicalNotes: onOpenClinicalNotes,
       ),
     ),
   );
@@ -140,24 +143,19 @@ Future<void> _scrollTo(WidgetTester tester, String text) async {
 }
 
 void main() {
-  testWidgets('puts forecast before current multimodal assessment',
-      (tester) async {
+  testWidgets('puts forecast before current multimodal assessment', (tester) async {
     await _pumpOverview(tester, _completeAssessment());
-
     expect(find.text('ACUTE ESCALATION FORECAST'), findsOneWidget);
     expect(find.text('CURRENT MULTIMODAL ASSESSMENT'), findsOneWidget);
-
-    final forecastY =
-        tester.getTopLeft(find.text('ACUTE ESCALATION FORECAST')).dy;
-    final currentY =
-        tester.getTopLeft(find.text('CURRENT MULTIMODAL ASSESSMENT')).dy;
-    expect(forecastY, lessThan(currentY));
+    expect(
+      tester.getTopLeft(find.text('ACUTE ESCALATION FORECAST')).dy,
+      lessThan(tester.getTopLeft(find.text('CURRENT MULTIMODAL ASSESSMENT')).dy),
+    );
   });
 
   testWidgets('labels physiological forecast without claiming multimodal scope',
       (tester) async {
     await _pumpOverview(tester, _completeAssessment());
-
     expect(find.text('Physiological forecast'), findsOneWidget);
     expect(find.textContaining('10-minute horizon'), findsOneWidget);
     expect(find.text('High · 0.84'), findsOneWidget);
@@ -167,7 +165,6 @@ void main() {
   testWidgets('shows server current assessment and separate uncertainty fields',
       (tester) async {
     await _pumpOverview(tester, _completeAssessment());
-
     expect(find.text('Medium · 0.58'), findsOneWidget);
     expect(find.text('Complete assessment'), findsOneWidget);
     expect(find.text('Confidence 0.71'), findsOneWidget);
@@ -176,12 +173,9 @@ void main() {
     expect(find.text('Model ragf-v0.4'), findsOneWidget);
   });
 
-  testWidgets('shows all four signals with C3 subordinate to fusion',
-      (tester) async {
+  testWidgets('shows all four signals with C3 subordinate to fusion', (tester) async {
     await _pumpOverview(tester, _completeAssessment());
-
     await _scrollTo(tester, 'Clinical NLP / TC-WPN');
-
     expect(find.text('Physiological'), findsOneWidget);
     expect(find.text('Behavioural'), findsOneWidget);
     expect(find.text('Clinical NLP / TC-WPN'), findsOneWidget);
@@ -218,10 +212,8 @@ void main() {
       computedAt: complete.computedAt,
       modelVersion: complete.modelVersion,
     );
-
     await _pumpOverview(tester, stale);
     await _scrollTo(tester, 'Physiological');
-
     expect(find.text('Stale'), findsOneWidget);
     expect(find.text('Partial assessment'), findsOneWidget);
   });
@@ -254,10 +246,8 @@ void main() {
       computedAt: complete.computedAt,
       modelVersion: complete.modelVersion,
     );
-
     await _pumpOverview(tester, c3Unavailable);
     await _scrollTo(tester, 'Clinical NLP / TC-WPN');
-
     expect(find.text('Unavailable'), findsWidgets);
     expect(find.text('0.00'), findsNothing);
     expect(find.text('0'), findsNothing);
@@ -265,38 +255,37 @@ void main() {
 
   testWidgets('missing assessment is unavailable and never low', (tester) async {
     await _pumpOverview(tester, null);
-
     expect(find.text('Assessment unavailable'), findsOneWidget);
     expect(find.text('Low'), findsNothing);
     expect(find.text('0.00'), findsNothing);
   });
 
-  testWidgets('shows both P5A deep-view actions for a loaded assessment',
+  testWidgets('shows P5A and P5B deep-view actions for a loaded assessment',
       (tester) async {
     await _pumpOverview(tester, _completeAssessment());
-
-    await _scrollTo(tester, 'View signals & contributions');
-    expect(find.text('View signals & contributions'), findsOneWidget);
-
-    await _scrollTo(tester, 'View data quality');
-    expect(find.text('View data quality'), findsOneWidget);
+    for (final label in [
+      'View signals & contributions',
+      'View data quality',
+      'View timeline',
+      'View clinical notes',
+    ]) {
+      await _scrollTo(tester, label);
+      expect(find.text(label), findsOneWidget);
+    }
   });
 
   testWidgets('signals action receives the exact loaded AssessmentSummary object',
       (tester) async {
     final assessment = _completeAssessment();
     AssessmentSummary? received;
-
     final harness = await _pumpOverview(
       tester,
       assessment,
       onOpenSignalsContributions: (value) => received = value,
     );
-
     await _scrollTo(tester, 'View signals & contributions');
     await tester.tap(find.text('View signals & contributions'));
     await tester.pump();
-
     expect(identical(received, assessment), isTrue);
     expect(harness.repository.latestAssessmentCalls, 1);
   });
@@ -305,41 +294,76 @@ void main() {
       (tester) async {
     final assessment = _completeAssessment();
     AssessmentSummary? received;
-
     final harness = await _pumpOverview(
       tester,
       assessment,
       onOpenDataQuality: (value) => received = value,
     );
-
     await _scrollTo(tester, 'View data quality');
     await tester.tap(find.text('View data quality'));
     await tester.pump();
-
     expect(identical(received, assessment), isTrue);
     expect(harness.repository.latestAssessmentCalls, 1);
   });
 
-  testWidgets('opening a P5A deep view does not fetch a second assessment',
+  testWidgets('timeline receives canonical subject id without refetching current assessment',
       (tester) async {
+    String? receivedSubject;
+    final harness = await _pumpOverview(
+      tester,
+      _completeAssessment(),
+      onOpenTimeline: (value) => receivedSubject = value,
+    );
+    await _scrollTo(tester, 'View timeline');
+    await tester.tap(find.text('View timeline'));
+    await tester.pump();
+    expect(receivedSubject, 'subject-001');
+    expect(harness.repository.latestAssessmentCalls, 1);
+  });
+
+  testWidgets('clinical notes receive canonical and local identities separately',
+      (tester) async {
+    String? backendId;
+    String? localId;
+    final harness = await _pumpOverview(
+      tester,
+      _completeAssessment(),
+      localRecordId: 'MRN-001',
+      onOpenClinicalNotes: (subject, local) {
+        backendId = subject;
+        localId = local;
+      },
+    );
+    await _scrollTo(tester, 'View clinical notes');
+    await tester.tap(find.text('View clinical notes'));
+    await tester.pump();
+    expect(backendId, 'subject-001');
+    expect(localId, 'MRN-001');
+    expect(backendId, isNot(localId));
+    expect(harness.repository.latestAssessmentCalls, 1);
+  });
+
+  testWidgets('opening deep views never adds a current-assessment fetch', (tester) async {
     final assessment = _completeAssessment();
     final harness = await _pumpOverview(
       tester,
       assessment,
       onOpenSignalsContributions: (_) {},
       onOpenDataQuality: (_) {},
+      onOpenTimeline: (_) {},
+      onOpenClinicalNotes: (_, __) {},
     );
-
     expect(harness.repository.latestAssessmentCalls, 1);
-
-    await _scrollTo(tester, 'View signals & contributions');
-    await tester.tap(find.text('View signals & contributions'));
-    await tester.pump();
-    expect(harness.repository.latestAssessmentCalls, 1);
-
-    await _scrollTo(tester, 'View data quality');
-    await tester.tap(find.text('View data quality'));
-    await tester.pump();
-    expect(harness.repository.latestAssessmentCalls, 1);
+    for (final label in [
+      'View signals & contributions',
+      'View data quality',
+      'View timeline',
+      'View clinical notes',
+    ]) {
+      await _scrollTo(tester, label);
+      await tester.tap(find.text(label));
+      await tester.pump();
+      expect(harness.repository.latestAssessmentCalls, 1);
+    }
   });
 }

@@ -80,6 +80,7 @@ class _PatientsScreenState extends State<PatientsScreen> {
           MaterialPageRoute(
             builder: (_) => PatientOverviewScreen.production(
               subjectId: subjectId!,
+              localRecordId: patient.mrn,
               displayId: patient.name,
             ),
           ),

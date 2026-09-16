@@ -4,35 +4,52 @@ import 'package:intl/intl.dart';
 import '../../core/design/components.dart';
 import '../../core/design/theme.dart';
 import '../../core/design/tokens.dart';
+import '../../data/api/session.dart';
 import '../../data/repositories/central_backend_repositories.dart';
 import '../../domain/contracts/assessment_summary.dart';
 import '../../domain/contracts/contract_enums.dart';
 import '../../state/async_data_state.dart';
 import '../../state/patient_overview_controller.dart';
+import 'clinical_notes_screen.dart';
 import 'data_quality_screen.dart';
 import 'signals_contributions_screen.dart';
+import 'timeline_screen.dart';
+
+typedef OpenClinicalNotes = void Function(
+  String subjectId,
+  String localRecordId,
+);
 
 class PatientOverviewScreen extends StatefulWidget {
   final String? displayId;
+  final String? localRecordId;
   final PatientOverviewController? controller;
   final String? subjectId;
   final ValueChanged<AssessmentSummary>? onOpenSignalsContributions;
   final ValueChanged<AssessmentSummary>? onOpenDataQuality;
+  final ValueChanged<String>? onOpenTimeline;
+  final OpenClinicalNotes? onOpenClinicalNotes;
 
   const PatientOverviewScreen({
     super.key,
     required this.controller,
     this.displayId,
+    this.localRecordId,
     this.onOpenSignalsContributions,
     this.onOpenDataQuality,
+    this.onOpenTimeline,
+    this.onOpenClinicalNotes,
   }) : subjectId = null;
 
   const PatientOverviewScreen.production({
     super.key,
     required this.subjectId,
     this.displayId,
+    this.localRecordId,
     this.onOpenSignalsContributions,
     this.onOpenDataQuality,
+    this.onOpenTimeline,
+    this.onOpenClinicalNotes,
   }) : controller = null;
 
   @override
@@ -154,6 +171,34 @@ class _PatientOverviewScreenState extends State<PatientOverviewScreen> {
               onOpenDetails: () => _openDataQuality(assessment),
             ),
             const SizedBox(height: Ds.s6),
+            const SectionLabel('Temporal context & notes'),
+            Panel(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  const Text(
+                    'Timeline is historical backend context. Clinical-note history shown in ClinAnx is device-local until a server read contract is verified.',
+                    style: TextStyle(
+                      fontSize: 12,
+                      height: 1.4,
+                      color: Ds.inkMuted,
+                    ),
+                  ),
+                  const SizedBox(height: Ds.s2),
+                  TextButton.icon(
+                    onPressed: _openTimeline,
+                    icon: const Icon(Icons.timeline_rounded, size: 16),
+                    label: const Text('View timeline'),
+                  ),
+                  TextButton.icon(
+                    onPressed: _openClinicalNotes,
+                    icon: const Icon(Icons.note_alt_outlined, size: 16),
+                    label: const Text('View clinical notes'),
+                  ),
+                ],
+              ),
+            ),
+            const SizedBox(height: Ds.s6),
             const DecisionSupportNotice(),
           ],
         ),
@@ -191,6 +236,48 @@ class _PatientOverviewScreenState extends State<PatientOverviewScreen> {
       MaterialPageRoute(
         builder: (_) => DataQualityScreen(
           assessment: assessment,
+          displayId: widget.displayId,
+        ),
+      ),
+    );
+  }
+
+  void _openTimeline() {
+    final callback = widget.onOpenTimeline;
+    if (callback != null) {
+      callback(_controller.subjectId);
+      return;
+    }
+
+    Navigator.push(
+      context,
+      MaterialPageRoute(
+        builder: (_) => TimelineScreen.production(
+          subjectId: _controller.subjectId,
+          displayId: widget.displayId,
+        ),
+      ),
+    );
+  }
+
+  void _openClinicalNotes() {
+    final localRecordId =
+        widget.localRecordId ?? 'canonical-local::${_controller.subjectId}';
+    final callback = widget.onOpenClinicalNotes;
+    if (callback != null) {
+      callback(_controller.subjectId, localRecordId);
+      return;
+    }
+
+    Navigator.push(
+      context,
+      MaterialPageRoute(
+        builder: (_) => ClinicalNotesScreen.production(
+          subjectId: _controller.subjectId,
+          localRecordId: localRecordId,
+          clinicianId: Session.clinicianId ?? '',
+          refreshCanonicalAssessment: () =>
+              _controller.load(showLoading: false),
           displayId: widget.displayId,
         ),
       ),
