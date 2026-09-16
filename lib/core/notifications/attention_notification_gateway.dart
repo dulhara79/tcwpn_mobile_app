@@ -1,3 +1,5 @@
+import 'dart:async';
+
 abstract interface class AttentionNotificationGateway {
   Future<void> initialize();
   Future<bool> requestPermission();
