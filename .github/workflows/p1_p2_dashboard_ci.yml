@@ -7,6 +7,7 @@ on:
       - fix/clinanx-p1-p2-verification-gate
       - integration/clinanx-p3-patient-overview
       - integration/clinanx-p4-attention-events
+      - integration/clinanx-p5a-signals-data-quality
   pull_request:
     branches:
       - main
@@ -41,8 +42,7 @@ jobs:
           test/features/attention_events/activity_screen_test.dart
           test/features/attention_events/attention_event_detail_screen_test.dart
           test/features/dashboard/server_dashboard_screen_test.dart
-          test/features/patients/patient_overview_screen_test.dart
-          test/features/patients/patients_screen_navigation_test.dart
+          test/features/patients
           test/shell_navigation_structure_test.dart
       - name: Focused analysis
         run: >-
