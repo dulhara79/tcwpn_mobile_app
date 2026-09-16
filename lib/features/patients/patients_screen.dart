@@ -5,13 +5,32 @@ import 'package:provider/provider.dart';
 import '../../core/design/components.dart';
 import '../../core/design/theme.dart';
 import '../../core/design/tokens.dart';
+import '../../data/api/gateways.dart';
 import '../../domain/models.dart';
 import '../../state/controllers.dart';
 import '../chart/patient_chart_screen.dart';
+import 'patient_overview_screen.dart';
 import 'scan_patient_id_screen.dart';
 
+typedef ResolveSubjectId = Future<String?> Function(String localId);
+typedef OpenPatientOverview = void Function(
+  BuildContext context,
+  Patient patient,
+  String subjectId,
+);
+typedef OpenLegacyChart = void Function(BuildContext context, Patient patient);
+
 class PatientsScreen extends StatefulWidget {
-  const PatientsScreen({super.key});
+  final ResolveSubjectId? resolveSubjectId;
+  final OpenPatientOverview? onOpenOverview;
+  final OpenLegacyChart? onOpenLegacyChart;
+
+  const PatientsScreen({
+    super.key,
+    this.resolveSubjectId,
+    this.onOpenOverview,
+    this.onOpenLegacyChart,
+  });
 
   @override
   State<PatientsScreen> createState() => _PatientsScreenState();
@@ -26,6 +45,55 @@ class _PatientsScreenState extends State<PatientsScreen> {
   void dispose() {
     _search.dispose();
     super.dispose();
+  }
+
+  Future<String?> _resolveCanonicalSubject(String localId) async {
+    final gateway = CentralBackendGateway();
+    try {
+      final normalized = localId.trim().toUpperCase();
+      if (RegExp(r'^P_[A-F0-9]{16}$').hasMatch(normalized)) {
+        return await gateway.resolveAppUserId(normalized);
+      }
+      return await gateway.resolveMrn(localId.trim());
+    } finally {
+      gateway.dispose();
+    }
+  }
+
+  Future<void> _openPatient(BuildContext context, Patient patient) async {
+    String? subjectId;
+    try {
+      final resolver = widget.resolveSubjectId ?? _resolveCanonicalSubject;
+      subjectId = await resolver(patient.mrn);
+    } catch (_) {
+      subjectId = null;
+    }
+
+    if (!context.mounted) return;
+    if (subjectId != null && subjectId.trim().isNotEmpty) {
+      final openOverview = widget.onOpenOverview;
+      if (openOverview != null) {
+        openOverview(context, patient, subjectId);
+      } else {
+        Navigator.push(
+          context,
+          MaterialPageRoute(
+            builder: (_) => PatientOverviewScreen.production(
+              subjectId: subjectId!,
+              displayId: patient.name,
+            ),
+          ),
+        );
+      }
+      return;
+    }
+
+    final openLegacy = widget.onOpenLegacyChart;
+    if (openLegacy != null) {
+      openLegacy(context, patient);
+    } else {
+      openChart(context, patient);
+    }
   }
 
   @override
@@ -108,7 +176,7 @@ class _PatientsScreenState extends State<PatientsScreen> {
                     itemBuilder: (_, i) => PatientRow(
                       patient: results[i],
                       fusion: roster.fusionFor(results[i].mrn),
-                      onTap: () => openChart(context, results[i]),
+                      onTap: () => _openPatient(context, results[i]),
                     ),
                   ),
           ),

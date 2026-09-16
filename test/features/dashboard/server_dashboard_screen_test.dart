@@ -146,4 +146,29 @@ void main() {
     expect(find.text('Low'), findsNothing);
     expect(find.text('0'), findsNothing);
   });
+
+  testWidgets('opens Patient Overview with the server canonical subject id',
+      (tester) async {
+    final controller = DashboardController(
+      repository: _FakeDashboardRepository(_snapshot()),
+    );
+    await controller.load();
+    PatientSummary? opened;
+
+    await tester.pumpWidget(
+      MaterialApp(
+        home: ServerDashboardScreen(
+          controller: controller,
+          onOpenPatient: (patient) => opened = patient,
+        ),
+      ),
+    );
+
+    await tester.tap(find.text('Patient A'));
+    await tester.pump();
+
+    expect(opened, isNotNull);
+    expect(opened!.subjectId, 'subject-001');
+    expect(opened!.displayId, 'Patient A');
+  });
 }
