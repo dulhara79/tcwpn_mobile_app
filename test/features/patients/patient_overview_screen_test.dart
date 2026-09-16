@@ -9,10 +9,25 @@ import 'package:r26_ds012_app/state/patient_overview_controller.dart';
 
 class _Repository implements AssessmentRepository {
   final AssessmentSummary? assessment;
+  int latestAssessmentCalls = 0;
+
   _Repository(this.assessment);
 
   @override
-  Future<AssessmentSummary?> latestAssessment(String subjectId) async => assessment;
+  Future<AssessmentSummary?> latestAssessment(String subjectId) async {
+    latestAssessmentCalls++;
+    return assessment;
+  }
+}
+
+class _OverviewHarness {
+  final _Repository repository;
+  final PatientOverviewController controller;
+
+  const _OverviewHarness({
+    required this.repository,
+    required this.controller,
+  });
 }
 
 AssessmentSummary _completeAssessment() => AssessmentSummary(
@@ -87,13 +102,16 @@ AssessmentSummary _completeAssessment() => AssessmentSummary(
       modelVersion: 'ragf-v0.4',
     );
 
-Future<void> _pumpOverview(
+Future<_OverviewHarness> _pumpOverview(
   WidgetTester tester,
-  AssessmentSummary? assessment,
-) async {
+  AssessmentSummary? assessment, {
+  ValueChanged<AssessmentSummary>? onOpenSignalsContributions,
+  ValueChanged<AssessmentSummary>? onOpenDataQuality,
+}) async {
+  final repository = _Repository(assessment);
   final controller = PatientOverviewController(
     subjectId: 'subject-001',
-    repository: _Repository(assessment),
+    repository: repository,
   );
   await controller.load();
 
@@ -102,8 +120,21 @@ Future<void> _pumpOverview(
       home: PatientOverviewScreen(
         displayId: 'Patient A',
         controller: controller,
+        onOpenSignalsContributions: onOpenSignalsContributions,
+        onOpenDataQuality: onOpenDataQuality,
       ),
     ),
+  );
+  await tester.pump();
+
+  return _OverviewHarness(repository: repository, controller: controller);
+}
+
+Future<void> _scrollTo(WidgetTester tester, String text) async {
+  await tester.scrollUntilVisible(
+    find.text(text),
+    250,
+    scrollable: find.byType(Scrollable).first,
   );
   await tester.pump();
 }
@@ -149,11 +180,7 @@ void main() {
       (tester) async {
     await _pumpOverview(tester, _completeAssessment());
 
-    await tester.scrollUntilVisible(
-      find.text('Clinical NLP / TC-WPN'),
-      250,
-      scrollable: find.byType(Scrollable).first,
-    );
+    await _scrollTo(tester, 'Clinical NLP / TC-WPN');
 
     expect(find.text('Physiological'), findsOneWidget);
     expect(find.text('Behavioural'), findsOneWidget);
@@ -193,11 +220,7 @@ void main() {
     );
 
     await _pumpOverview(tester, stale);
-    await tester.scrollUntilVisible(
-      find.text('Physiological'),
-      250,
-      scrollable: find.byType(Scrollable).first,
-    );
+    await _scrollTo(tester, 'Physiological');
 
     expect(find.text('Stale'), findsOneWidget);
     expect(find.text('Partial assessment'), findsOneWidget);
@@ -233,11 +256,7 @@ void main() {
     );
 
     await _pumpOverview(tester, c3Unavailable);
-    await tester.scrollUntilVisible(
-      find.text('Clinical NLP / TC-WPN'),
-      250,
-      scrollable: find.byType(Scrollable).first,
-    );
+    await _scrollTo(tester, 'Clinical NLP / TC-WPN');
 
     expect(find.text('Unavailable'), findsWidgets);
     expect(find.text('0.00'), findsNothing);
@@ -250,5 +269,77 @@ void main() {
     expect(find.text('Assessment unavailable'), findsOneWidget);
     expect(find.text('Low'), findsNothing);
     expect(find.text('0.00'), findsNothing);
+  });
+
+  testWidgets('shows both P5A deep-view actions for a loaded assessment',
+      (tester) async {
+    await _pumpOverview(tester, _completeAssessment());
+
+    await _scrollTo(tester, 'View signals & contributions');
+    expect(find.text('View signals & contributions'), findsOneWidget);
+
+    await _scrollTo(tester, 'View data quality');
+    expect(find.text('View data quality'), findsOneWidget);
+  });
+
+  testWidgets('signals action receives the exact loaded AssessmentSummary object',
+      (tester) async {
+    final assessment = _completeAssessment();
+    AssessmentSummary? received;
+
+    final harness = await _pumpOverview(
+      tester,
+      assessment,
+      onOpenSignalsContributions: (value) => received = value,
+    );
+
+    await _scrollTo(tester, 'View signals & contributions');
+    await tester.tap(find.text('View signals & contributions'));
+    await tester.pump();
+
+    expect(identical(received, assessment), isTrue);
+    expect(harness.repository.latestAssessmentCalls, 1);
+  });
+
+  testWidgets('data quality action receives the exact loaded AssessmentSummary object',
+      (tester) async {
+    final assessment = _completeAssessment();
+    AssessmentSummary? received;
+
+    final harness = await _pumpOverview(
+      tester,
+      assessment,
+      onOpenDataQuality: (value) => received = value,
+    );
+
+    await _scrollTo(tester, 'View data quality');
+    await tester.tap(find.text('View data quality'));
+    await tester.pump();
+
+    expect(identical(received, assessment), isTrue);
+    expect(harness.repository.latestAssessmentCalls, 1);
+  });
+
+  testWidgets('opening a P5A deep view does not fetch a second assessment',
+      (tester) async {
+    final assessment = _completeAssessment();
+    final harness = await _pumpOverview(
+      tester,
+      assessment,
+      onOpenSignalsContributions: (_) {},
+      onOpenDataQuality: (_) {},
+    );
+
+    expect(harness.repository.latestAssessmentCalls, 1);
+
+    await _scrollTo(tester, 'View signals & contributions');
+    await tester.tap(find.text('View signals & contributions'));
+    await tester.pump();
+    expect(harness.repository.latestAssessmentCalls, 1);
+
+    await _scrollTo(tester, 'View data quality');
+    await tester.tap(find.text('View data quality'));
+    await tester.pump();
+    expect(harness.repository.latestAssessmentCalls, 1);
   });
 }

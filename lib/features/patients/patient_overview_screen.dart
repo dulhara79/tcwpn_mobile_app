@@ -9,22 +9,30 @@ import '../../domain/contracts/assessment_summary.dart';
 import '../../domain/contracts/contract_enums.dart';
 import '../../state/async_data_state.dart';
 import '../../state/patient_overview_controller.dart';
+import 'data_quality_screen.dart';
+import 'signals_contributions_screen.dart';
 
 class PatientOverviewScreen extends StatefulWidget {
   final String? displayId;
   final PatientOverviewController? controller;
   final String? subjectId;
+  final ValueChanged<AssessmentSummary>? onOpenSignalsContributions;
+  final ValueChanged<AssessmentSummary>? onOpenDataQuality;
 
   const PatientOverviewScreen({
     super.key,
     required this.controller,
     this.displayId,
+    this.onOpenSignalsContributions,
+    this.onOpenDataQuality,
   }) : subjectId = null;
 
   const PatientOverviewScreen.production({
     super.key,
     required this.subjectId,
     this.displayId,
+    this.onOpenSignalsContributions,
+    this.onOpenDataQuality,
   }) : controller = null;
 
   @override
@@ -136,10 +144,54 @@ class _PatientOverviewScreenState extends State<PatientOverviewScreen> {
             const SizedBox(height: Ds.s6),
             _CurrentAssessmentSection(assessment: assessment),
             const SizedBox(height: Ds.s6),
-            _SignalsSection(modalities: assessment.modalities),
+            _SignalsSection(
+              modalities: assessment.modalities,
+              onOpenDetails: () => _openSignalsContributions(assessment),
+            ),
+            const SizedBox(height: Ds.s6),
+            _DataQualitySummary(
+              assessment: assessment,
+              onOpenDetails: () => _openDataQuality(assessment),
+            ),
             const SizedBox(height: Ds.s6),
             const DecisionSupportNotice(),
           ],
+        ),
+      ),
+    );
+  }
+
+  void _openSignalsContributions(AssessmentSummary assessment) {
+    final callback = widget.onOpenSignalsContributions;
+    if (callback != null) {
+      callback(assessment);
+      return;
+    }
+
+    Navigator.push(
+      context,
+      MaterialPageRoute(
+        builder: (_) => SignalsContributionsScreen(
+          assessment: assessment,
+          displayId: widget.displayId,
+        ),
+      ),
+    );
+  }
+
+  void _openDataQuality(AssessmentSummary assessment) {
+    final callback = widget.onOpenDataQuality;
+    if (callback != null) {
+      callback(assessment);
+      return;
+    }
+
+    Navigator.push(
+      context,
+      MaterialPageRoute(
+        builder: (_) => DataQualityScreen(
+          assessment: assessment,
+          displayId: widget.displayId,
         ),
       ),
     );
@@ -340,8 +392,12 @@ class _SignalsSection extends StatelessWidget {
   ];
 
   final List<ModalityStatus> modalities;
+  final VoidCallback onOpenDetails;
 
-  const _SignalsSection({required this.modalities});
+  const _SignalsSection({
+    required this.modalities,
+    required this.onOpenDetails,
+  });
 
   @override
   Widget build(BuildContext context) {
@@ -359,6 +415,63 @@ class _SignalsSection extends StatelessWidget {
               modality: byId[componentId],
             ),
           ),
+        Align(
+          alignment: Alignment.centerLeft,
+          child: TextButton.icon(
+            onPressed: onOpenDetails,
+            icon: const Icon(Icons.arrow_forward_rounded, size: 16),
+            label: const Text('View signals & contributions'),
+          ),
+        ),
+      ],
+    );
+  }
+}
+
+class _DataQualitySummary extends StatelessWidget {
+  final AssessmentSummary assessment;
+  final VoidCallback onOpenDetails;
+
+  const _DataQualitySummary({
+    required this.assessment,
+    required this.onOpenDetails,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        const SectionLabel('Data quality'),
+        Panel(
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(
+                'Assessment data status: ${_assessmentStatusLabel(assessment.assessmentStatus)}',
+                style: const TextStyle(
+                  fontWeight: FontWeight.w700,
+                  color: Ds.ink,
+                ),
+              ),
+              const SizedBox(height: Ds.s1),
+              const Text(
+                'Server-reported assessment data status. Open the detailed view for per-modality availability and quality fields.',
+                style: TextStyle(
+                  fontSize: 12,
+                  height: 1.4,
+                  color: Ds.inkMuted,
+                ),
+              ),
+              const SizedBox(height: Ds.s2),
+              TextButton.icon(
+                onPressed: onOpenDetails,
+                icon: const Icon(Icons.arrow_forward_rounded, size: 16),
+                label: const Text('View data quality'),
+              ),
+            ],
+          ),
+        ),
       ],
     );
   }

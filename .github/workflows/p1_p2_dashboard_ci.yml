@@ -7,6 +7,7 @@ on:
       - fix/clinanx-p1-p2-verification-gate
       - integration/clinanx-p3-patient-overview
       - integration/clinanx-p4-attention-events
+      - integration/clinanx-p5a-signals-data-quality
   pull_request:
     branches:
       - main
@@ -32,6 +33,7 @@ jobs:
           test/p1_p2_authority_cleanup_test.dart
           test/p3_patient_overview_authority_test.dart
           test/p4_attention_event_authority_test.dart
+          test/p5a_assessment_authority_test.dart
           test/composite_dashboard_repository_test.dart
           test/dashboard_controller_test.dart
           test/dashboard_cache_test.dart
@@ -41,8 +43,7 @@ jobs:
           test/features/attention_events/activity_screen_test.dart
           test/features/attention_events/attention_event_detail_screen_test.dart
           test/features/dashboard/server_dashboard_screen_test.dart
-          test/features/patients/patient_overview_screen_test.dart
-          test/features/patients/patients_screen_navigation_test.dart
+          test/features/patients
           test/shell_navigation_structure_test.dart
       - name: Focused analysis
         run: >-
@@ -62,7 +63,10 @@ jobs:
           lib/features/attention_events/activity_screen.dart
           lib/features/attention_events/attention_event_detail_screen.dart
           lib/features/dashboard/server_dashboard_screen.dart
+          lib/features/patients/assessment_detail_presentation.dart
           lib/features/patients/patient_overview_screen.dart
+          lib/features/patients/signals_contributions_screen.dart
+          lib/features/patients/data_quality_screen.dart
           lib/features/patients/patients_screen.dart
           lib/features/shell.dart
           test/repositories
@@ -70,14 +74,14 @@ jobs:
           test/p1_p2_authority_cleanup_test.dart
           test/p3_patient_overview_authority_test.dart
           test/p4_attention_event_authority_test.dart
+          test/p5a_assessment_authority_test.dart
           test/patient_overview_controller_test.dart
           test/attention_events_controller_test.dart
           test/attention_event_detail_controller_test.dart
           test/features/attention_events/activity_screen_test.dart
           test/features/attention_events/attention_event_detail_screen_test.dart
           test/features/dashboard/server_dashboard_screen_test.dart
-          test/features/patients/patient_overview_screen_test.dart
-          test/features/patients/patients_screen_navigation_test.dart
+          test/features/patients
           test/shell_navigation_structure_test.dart
       - name: Authority and forbidden-pattern checks
         shell: bash
@@ -100,6 +104,12 @@ jobs:
           fi
           if grep -n 'roster\.unacknowledgedCount' lib/features/shell.dart; then
             echo 'P4 Activity count must not use legacy local alert authority.'
+            exit 1
+          fi
+          if grep -R -nE "['\"]/?predict['\"]|/contributions|/data-quality|AlertBandX\.fromScore" \
+            lib/features/patients/signals_contributions_screen.dart \
+            lib/features/patients/data_quality_screen.dart 2>/dev/null; then
+            echo 'P5A deep views must not call models, guess routes, or derive risk locally.'
             exit 1
           fi
       - name: Full tests visibility
