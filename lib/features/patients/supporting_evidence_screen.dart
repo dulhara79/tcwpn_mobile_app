@@ -1,5 +1,4 @@
 import 'package:flutter/material.dart';
-import 'package:intl/intl.dart';
 
 import '../../core/design/components.dart';
 import '../../core/design/tokens.dart';
@@ -110,7 +109,9 @@ class _SupportingEvidenceScreenState extends State<SupportingEvidenceScreen> {
                       child: CircularProgressIndicator(strokeWidth: 2),
                     )
                   : const Icon(Icons.search_rounded),
-              label: Text(_controller.loading ? 'Checking evidence…' : 'Ask CARE-AnxRAG'),
+              label: Text(
+                _controller.loading ? 'Checking evidence…' : 'Ask CARE-AnxRAG',
+              ),
             ),
             if (_controller.error != null) ...[
               const SizedBox(height: Ds.s5),
@@ -123,8 +124,10 @@ class _SupportingEvidenceScreenState extends State<SupportingEvidenceScreen> {
                       style: TextStyle(fontWeight: FontWeight.w700),
                     ),
                     const SizedBox(height: Ds.s2),
-                    Text(_controller.error!,
-                        style: const TextStyle(color: Ds.inkMuted)),
+                    Text(
+                      _controller.error!,
+                      style: const TextStyle(color: Ds.inkMuted),
+                    ),
                   ],
                 ),
               ),
@@ -155,7 +158,8 @@ class _EvidenceResultView extends StatelessWidget {
         ),
       EvidenceState.abstained => _statePanel(
           'CARE-AnxRAG abstained',
-          result.abstentionReason ?? 'The evidence service did not return an answer.',
+          result.abstentionReason ??
+              'The evidence service did not return an answer.',
         ),
       EvidenceState.unavailable => _statePanel(
           'Supporting evidence unavailable',
@@ -171,7 +175,10 @@ class _EvidenceResultView extends StatelessWidget {
           children: [
             Text(title, style: const TextStyle(fontWeight: FontWeight.w700)),
             const SizedBox(height: Ds.s2),
-            Text(message, style: const TextStyle(color: Ds.inkMuted, height: 1.4)),
+            Text(
+              message,
+              style: const TextStyle(color: Ds.inkMuted, height: 1.4),
+            ),
           ],
         ),
       );
@@ -185,7 +192,9 @@ class _EvidenceResultView extends StatelessWidget {
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
                 Text(
-                  result.answer ?? 'Supporting evidence unavailable',
+                  result.hasAnswer
+                      ? result.answer!
+                      : 'Supporting evidence unavailable',
                   style: const TextStyle(height: 1.5),
                 ),
                 if (result.confidence != null || result.conflictScore != null) ...[
@@ -201,10 +210,10 @@ class _EvidenceResultView extends StatelessWidget {
                       style: const TextStyle(fontSize: 12, color: Ds.inkMuted),
                     ),
                 ],
-                if (result.knowledgeBaseLastSyncAt != null) ...[
+                if ((result.knowledgeBaseLastSyncAt ?? '').isNotEmpty) ...[
                   const SizedBox(height: Ds.s2),
                   Text(
-                    'Knowledge base last synced: ${DateFormat.yMMMd().add_jm().format(result.knowledgeBaseLastSyncAt!)}',
+                    'Knowledge base last synced: ${result.knowledgeBaseLastSyncAt}',
                     style: const TextStyle(fontSize: 11.5, color: Ds.inkFaint),
                   ),
                 ],
@@ -234,11 +243,18 @@ class _CitationCard extends StatelessWidget {
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            Text(citation.title, style: const TextStyle(fontWeight: FontWeight.w700)),
+            Text(
+              (citation.title ?? '').isEmpty
+                  ? 'Source ${citation.citationId}'
+                  : citation.title!,
+              style: const TextStyle(fontWeight: FontWeight.w700),
+            ),
             if ((citation.sourceName ?? '').isNotEmpty) ...[
               const SizedBox(height: Ds.s1),
-              Text(citation.sourceName!,
-                  style: const TextStyle(fontSize: 12, color: Ds.inkMuted)),
+              Text(
+                citation.sourceName!,
+                style: const TextStyle(fontSize: 12, color: Ds.inkMuted),
+              ),
             ],
             if ((citation.excerpt ?? '').isNotEmpty) ...[
               const SizedBox(height: Ds.s2),
@@ -246,8 +262,10 @@ class _CitationCard extends StatelessWidget {
             ],
             if ((citation.evidenceLevel ?? '').isNotEmpty) ...[
               const SizedBox(height: Ds.s2),
-              Text('Evidence level: ${citation.evidenceLevel}',
-                  style: const TextStyle(fontSize: 11.5, color: Ds.inkFaint)),
+              Text(
+                'Evidence level: ${citation.evidenceLevel}',
+                style: const TextStyle(fontSize: 11.5, color: Ds.inkFaint),
+              ),
             ],
           ],
         ),
