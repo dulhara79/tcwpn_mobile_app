@@ -1,5 +1,7 @@
 import 'package:shared_preferences/shared_preferences.dart';
 
+import 'clinician_storage_scope.dart';
+
 /// Local notification-delivery bookkeeping only.
 ///
 /// This store never represents the server AttentionEvent lifecycle. In
@@ -14,7 +16,10 @@ abstract interface class AttentionNotificationStore {
 
 class SharedPreferencesAttentionNotificationStore
     implements AttentionNotificationStore {
-  static const _pendingOpenKey = 'attention_notification_pending_open_v1';
+  static const _pendingOpenLogicalKey =
+      'attention_notification_pending_open_v1';
+  static const _deliveredLogicalKey =
+      'attention_notification_delivered_v1';
   static const _maxDeliveredIds = 512;
 
   final String deliveryScope;
@@ -23,8 +28,10 @@ class SharedPreferencesAttentionNotificationStore
     required this.deliveryScope,
   });
 
-  String get _deliveredKey =>
-      'attention_notification_delivered_v1::$deliveryScope';
+  ClinicianStorageScope get _scope => ClinicianStorageScope(deliveryScope);
+
+  String get _deliveredKey => _scope.key(_deliveredLogicalKey);
+  String get _pendingOpenKey => _scope.key(_pendingOpenLogicalKey);
 
   Future<SharedPreferences> get _prefs => SharedPreferences.getInstance();
 
