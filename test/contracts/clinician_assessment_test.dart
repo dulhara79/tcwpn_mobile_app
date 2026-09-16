@@ -6,7 +6,7 @@ void main() {
   group('ClinicianAssessmentDraft', () {
     test('accepts only the verified Low Medium High tier values', () {
       for (final tier in const ['Low', 'Medium', 'High']) {
-        final draft = ClinicianAssessmentDraft(
+        final draft = ClinicianAssessmentDraft.validated(
           fusionResultId: 37,
           tierLabel: tier,
           author: 'dr-1',
@@ -18,7 +18,7 @@ void main() {
 
     test('rejects unknown tier values instead of normalising them', () {
       expect(
-        () => ClinicianAssessmentDraft(
+        () => ClinicianAssessmentDraft.validated(
           fusionResultId: 37,
           tierLabel: 'Critical',
           author: 'dr-1',
