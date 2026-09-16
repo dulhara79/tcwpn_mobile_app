@@ -37,6 +37,7 @@ jobs:
           test/patient_overview_controller_test.dart
           test/attention_events_controller_test.dart
           test/attention_event_detail_controller_test.dart
+          test/features/attention_events/activity_screen_test.dart
           test/features/dashboard/server_dashboard_screen_test.dart
           test/features/patients/patient_overview_screen_test.dart
           test/features/patients/patients_screen_navigation_test.dart
@@ -51,6 +52,8 @@ jobs:
           lib/state/async_data_state.dart
           lib/state/dashboard_controller.dart
           lib/state/patient_overview_controller.dart
+          lib/state/attention_events_controller.dart
+          lib/state/attention_event_detail_controller.dart
           lib/state/controllers.dart
           lib/data/api/api_client.dart
           lib/data/api/gateways.dart
@@ -66,6 +69,7 @@ jobs:
           test/patient_overview_controller_test.dart
           test/attention_events_controller_test.dart
           test/attention_event_detail_controller_test.dart
+          test/features/attention_events/activity_screen_test.dart
           test/features/dashboard/server_dashboard_screen_test.dart
           test/features/patients/patient_overview_screen_test.dart
           test/features/patients/patients_screen_navigation_test.dart
