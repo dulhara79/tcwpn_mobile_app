@@ -3,10 +3,14 @@
 // ONE shell. The server-backed Dashboard is the primary clinician worklist.
 // Current assessment, forecast, assignments and attention-event identity come
 // from the Central Backend; this shell never recalculates patient risk.
+//
+// Local clinical caches are also owned here, after authentication, so signing
+// out disposes the provider tree before another clinician can enter the app.
 
 import 'dart:async';
 
 import 'package:flutter/material.dart';
+import 'package:provider/provider.dart';
 
 import '../core/notifications/attention_notification_gateway.dart';
 import '../core/notifications/flutter_attention_notification_gateway.dart';
@@ -14,6 +18,7 @@ import '../data/api/session.dart';
 import '../data/local/attention_notification_store.dart';
 import '../data/repositories/central_backend_repositories.dart';
 import '../state/attention_notification_controller.dart';
+import '../state/controllers.dart';
 import '../state/dashboard_controller.dart';
 import 'attention_events/activity_screen.dart';
 import 'attention_events/attention_event_detail_screen.dart';
@@ -158,7 +163,10 @@ class _AppShellState extends State<AppShell> with WidgetsBindingObserver {
   void dispose() {
     WidgetsBinding.instance.removeObserver(this);
     _stopNotificationPolling();
-    unawaited(_notificationOpenSubscription?.cancel());
+    final subscription = _notificationOpenSubscription;
+    if (subscription != null) {
+      unawaited(subscription.cancel());
+    }
     if (_ownsDashboardController) {
       _dashboardController.dispose();
     }
@@ -167,47 +175,50 @@ class _AppShellState extends State<AppShell> with WidgetsBindingObserver {
 
   @override
   Widget build(BuildContext context) {
-    return Scaffold(
-      body: IndexedStack(
-        index: _tab,
-        children: [
-          ServerDashboardScreen(controller: _dashboardController),
-          const PatientsScreen(),
-          const ActivityScreen.production(),
-          const SettingsScreen(),
-          const AskCareScreen(),
-        ],
-      ),
-      bottomNavigationBar: NavigationBar(
-        selectedIndex: _tab,
-        onDestinationSelected: (i) => setState(() => _tab = i),
-        destinations: const [
-          NavigationDestination(
-            icon: Icon(Icons.dashboard_outlined),
-            selectedIcon: Icon(Icons.dashboard_rounded),
-            label: 'Dashboard',
-          ),
-          NavigationDestination(
-            icon: Icon(Icons.folder_shared_outlined),
-            selectedIcon: Icon(Icons.folder_shared_rounded),
-            label: 'Patients',
-          ),
-          NavigationDestination(
-            icon: Icon(Icons.notifications_none_rounded),
-            selectedIcon: Icon(Icons.notifications_rounded),
-            label: 'Activity',
-          ),
-          NavigationDestination(
-            icon: Icon(Icons.tune_outlined),
-            selectedIcon: Icon(Icons.tune_rounded),
-            label: 'Settings',
-          ),
-          NavigationDestination(
-            icon: Icon(Icons.psychology_outlined),
-            selectedIcon: Icon(Icons.psychology),
-            label: 'Ask CARE',
-          ),
-        ],
+    return ChangeNotifierProvider(
+      create: (_) => RosterController()..init(),
+      child: Scaffold(
+        body: IndexedStack(
+          index: _tab,
+          children: [
+            ServerDashboardScreen(controller: _dashboardController),
+            const PatientsScreen(),
+            const ActivityScreen.production(),
+            const SettingsScreen(),
+            const AskCareScreen(),
+          ],
+        ),
+        bottomNavigationBar: NavigationBar(
+          selectedIndex: _tab,
+          onDestinationSelected: (i) => setState(() => _tab = i),
+          destinations: const [
+            NavigationDestination(
+              icon: Icon(Icons.dashboard_outlined),
+              selectedIcon: Icon(Icons.dashboard_rounded),
+              label: 'Dashboard',
+            ),
+            NavigationDestination(
+              icon: Icon(Icons.folder_shared_outlined),
+              selectedIcon: Icon(Icons.folder_shared_rounded),
+              label: 'Patients',
+            ),
+            NavigationDestination(
+              icon: Icon(Icons.notifications_none_rounded),
+              selectedIcon: Icon(Icons.notifications_rounded),
+              label: 'Activity',
+            ),
+            NavigationDestination(
+              icon: Icon(Icons.tune_outlined),
+              selectedIcon: Icon(Icons.tune_rounded),
+              label: 'Settings',
+            ),
+            NavigationDestination(
+              icon: Icon(Icons.psychology_outlined),
+              selectedIcon: Icon(Icons.psychology),
+              label: 'Ask CARE',
+            ),
+          ],
+        ),
       ),
     );
   }
