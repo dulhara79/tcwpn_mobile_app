@@ -172,4 +172,16 @@ void main() {
     expect(auth.expirations, 0);
     expect(controller.state.status, AsyncDataStatus.conflict);
   });
+
+  test('unverified target transport is explicit unavailable, not generic error',
+      () async {
+    final repo = _Repository()
+      ..failure = const ApiException(kind: ApiFailure.notConfigured);
+    final controller = DashboardController(repository: repo);
+
+    await controller.load();
+
+    expect(controller.state.status, AsyncDataStatus.unavailable);
+    expect(controller.state.data, isNull);
+  });
 }
