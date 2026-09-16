@@ -17,17 +17,15 @@ class PatientOverviewScreen extends StatefulWidget {
 
   const PatientOverviewScreen({
     super.key,
-    required PatientOverviewController controller,
+    required this.controller,
     this.displayId,
-  })  : controller = controller,
-        subjectId = null;
+  }) : subjectId = null;
 
   const PatientOverviewScreen.production({
     super.key,
-    required String subjectId,
+    required this.subjectId,
     this.displayId,
-  })  : subjectId = subjectId,
-        controller = null;
+  }) : controller = null;
 
   @override
   State<PatientOverviewScreen> createState() => _PatientOverviewScreenState();
