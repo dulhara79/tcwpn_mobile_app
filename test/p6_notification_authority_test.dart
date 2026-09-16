@@ -35,7 +35,7 @@ void main() {
   });
 
   test('notification content is generic and event-id based', () {
-    final path = 'lib/core/notifications/flutter_attention_notification_gateway.dart';
+    const path = 'lib/core/notifications/flutter_attention_notification_gateway.dart';
     expect(File(path).existsSync(), isTrue);
     if (!File(path).existsSync()) return;
 
