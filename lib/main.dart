@@ -15,7 +15,6 @@ import 'dart:async';
 
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
-import 'package:provider/provider.dart';
 
 import 'core/design/theme.dart';
 import 'core/notifications/flutter_attention_notification_gateway.dart';
@@ -27,7 +26,6 @@ import 'data/local/stores.dart';
 import 'features/auth/login_screen.dart';
 import 'features/consent/consent_gate_screen.dart';
 import 'features/shell.dart';
-import 'state/controllers.dart';
 
 /// Keep in step with `version:` in pubspec.yaml. Recorded on every acceptance.
 const String kAppVersion = '1.0.0+1';
@@ -60,9 +58,9 @@ Future<void> main() async {
   final consented = await ConsentStore.hasValidConsent();
   final signedIn = consented && await SecureStore.hasSession();
 
-  // Restore the bearer token into memory so the first request after a warm
-  // start is authenticated. Skipping this makes the app look signed in while
-  // every model call returns 401.
+  // Restore the bearer token and the clinician-scoped cache namespace before
+  // the authenticated shell is created. Clinical SharedPreferences are not
+  // opened while the app is still at consent or sign-in.
   if (signedIn) {
     Session.set(
       token: await SecureStore.token() ?? '',
@@ -92,24 +90,21 @@ class _ClinAnxAppState extends State<ClinAnxApp> {
 
   @override
   Widget build(BuildContext context) {
-    return ChangeNotifierProvider(
-      create: (_) => RosterController()..init(),
-      child: MaterialApp(
-        title: 'ClinAnx',
-        debugShowCheckedModeBanner: false,
-        theme: AppTheme.light,
-        builder: (context, child) => MediaQuery.withClampedTextScaling(
-          minScaleFactor: 0.9,
-          maxScaleFactor: 1.3,
-          child: ColoredBox(color: Ds.canvas, child: child!),
-        ),
-        home: !_consented
-            ? ConsentGateScreen(
-                appVersion: kAppVersion,
-                onAccepted: () => setState(() => _consented = true),
-              )
-            : (widget.signedIn ? const AppShell() : const LoginScreen()),
+    return MaterialApp(
+      title: 'ClinAnx',
+      debugShowCheckedModeBanner: false,
+      theme: AppTheme.light,
+      builder: (context, child) => MediaQuery.withClampedTextScaling(
+        minScaleFactor: 0.9,
+        maxScaleFactor: 1.3,
+        child: ColoredBox(color: Ds.canvas, child: child!),
       ),
+      home: !_consented
+          ? ConsentGateScreen(
+              appVersion: kAppVersion,
+              onAccepted: () => setState(() => _consented = true),
+            )
+          : (widget.signedIn ? const AppShell() : const LoginScreen()),
     );
   }
 }
