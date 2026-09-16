@@ -66,11 +66,11 @@ void main() {
 
     await _pump(tester, controller);
 
-    expect(find.text('Current model assessment'), findsOneWidget);
+    expect(find.text('CURRENT MODEL ASSESSMENT'), findsOneWidget);
     expect(find.textContaining('Medium · 0.58'), findsOneWidget);
     expect(find.textContaining('Fusion result #37'), findsOneWidget);
     expect(find.textContaining('ragf-v0.4'), findsOneWidget);
-    expect(find.text('Your clinician assessment'), findsOneWidget);
+    expect(find.text('YOUR CLINICIAN ASSESSMENT'), findsOneWidget);
     expect(find.text('Low'), findsOneWidget);
     expect(find.text('Medium'), findsOneWidget);
     expect(find.text('High'), findsOneWidget);
