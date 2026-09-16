@@ -144,8 +144,8 @@ class _AppShellState extends State<AppShell> with WidgetsBindingObserver {
 
     if (consumePending) {
       await _notificationStore.takePendingOpen();
-      if (!mounted) return;
     }
+    if (!mounted) return;
 
     await Navigator.of(context).push(
       MaterialPageRoute<void>(
