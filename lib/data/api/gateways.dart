@@ -158,7 +158,9 @@ class CentralBackendGateway {
     }
   }
 
-  Future<EvidenceResult> evidence({
+  /// Raw transport retained for compatibility with older gateway-level tests.
+  /// P5C production code consumes it only through the typed EvidenceRepository.
+  Future<Map<String, dynamic>> evidence({
     required String subjectId,
     required String question,
   }) async {
@@ -166,12 +168,11 @@ class CentralBackendGateway {
     if (trimmed.isEmpty) {
       throw ArgumentError.value(question, 'question', 'must not be blank');
     }
-    final json = await _api.post(
+    return _api.post(
       '/v1/doctor/patients/${Uri.encodeComponent(subjectId)}/evidence',
       {'question': trimmed},
       timeout: Env.inferenceTimeout,
     );
-    return EvidenceResult.fromJson(json);
   }
 
   Future<EvidenceResult> askEvidence(String question) async {
