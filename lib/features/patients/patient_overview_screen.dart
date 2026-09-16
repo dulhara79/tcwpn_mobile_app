@@ -4,38 +4,79 @@ import 'package:intl/intl.dart';
 import '../../core/design/components.dart';
 import '../../core/design/theme.dart';
 import '../../core/design/tokens.dart';
+import '../../data/repositories/central_backend_repositories.dart';
 import '../../domain/contracts/assessment_summary.dart';
 import '../../domain/contracts/contract_enums.dart';
 import '../../state/async_data_state.dart';
 import '../../state/patient_overview_controller.dart';
 
-class PatientOverviewScreen extends StatelessWidget {
+class PatientOverviewScreen extends StatefulWidget {
   final String? displayId;
-  final PatientOverviewController controller;
+  final PatientOverviewController? controller;
+  final String? subjectId;
 
   const PatientOverviewScreen({
     super.key,
-    required this.controller,
+    required PatientOverviewController controller,
     this.displayId,
-  });
+  })  : controller = controller,
+        subjectId = null;
+
+  const PatientOverviewScreen.production({
+    super.key,
+    required String subjectId,
+    this.displayId,
+  })  : subjectId = subjectId,
+        controller = null;
+
+  @override
+  State<PatientOverviewScreen> createState() => _PatientOverviewScreenState();
+}
+
+class _PatientOverviewScreenState extends State<PatientOverviewScreen> {
+  late final PatientOverviewController _controller;
+  late final bool _ownsController;
+
+  @override
+  void initState() {
+    super.initState();
+    _ownsController = widget.controller == null;
+    _controller = widget.controller ??
+        PatientOverviewController(
+          subjectId: widget.subjectId!,
+          repository: CentralBackendAssessmentRepository(),
+          authRepository: CentralBackendAuthRepository(),
+        );
+    if (_ownsController) {
+      _controller.load();
+    }
+  }
+
+  @override
+  void dispose() {
+    if (_ownsController) {
+      _controller.dispose();
+    }
+    super.dispose();
+  }
 
   @override
   Widget build(BuildContext context) {
     return AnimatedBuilder(
-      animation: controller,
+      animation: _controller,
       builder: (context, _) {
-        final state = controller.state;
+        final state = _controller.state;
         return Scaffold(
           appBar: AppBar(
             title: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
                 Text(
-                  displayId ?? controller.subjectId,
+                  widget.displayId ?? _controller.subjectId,
                   style: AppTheme.display(size: 16.5),
                 ),
                 Text(
-                  controller.subjectId,
+                  _controller.subjectId,
                   style: AppTheme.data(size: 10.5, color: Ds.inkFaint),
                 ),
               ],
@@ -72,12 +113,12 @@ class PatientOverviewScreen extends StatelessWidget {
         actionLabel: state.status == AsyncDataStatus.sessionExpired ? null : 'Retry',
         onAction: state.status == AsyncDataStatus.sessionExpired
             ? null
-            : () => controller.load(),
+            : () => _controller.load(),
       );
     }
 
     return RefreshIndicator(
-      onRefresh: () => controller.load(showLoading: false),
+      onRefresh: () => _controller.load(showLoading: false),
       child: SingleChildScrollView(
         physics: const AlwaysScrollableScrollPhysics(),
         padding: const EdgeInsets.fromLTRB(Ds.s4, Ds.s4, Ds.s4, Ds.s10),
