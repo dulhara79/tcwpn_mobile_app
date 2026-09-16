@@ -15,8 +15,13 @@ class CentralBackendEvidenceRepository implements EvidenceRepository {
   Future<EvidenceResult> ask({
     required String subjectId,
     required String question,
-  }) =>
-      _gateway.evidence(subjectId: subjectId, question: question);
+  }) async {
+    final json = await _gateway.evidence(
+      subjectId: subjectId,
+      question: question,
+    );
+    return EvidenceResult.fromJson(json);
+  }
 
   void dispose() => _gateway.dispose();
 }
