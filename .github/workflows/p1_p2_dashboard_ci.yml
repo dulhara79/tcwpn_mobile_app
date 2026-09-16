@@ -25,6 +25,7 @@ jobs:
           flutter test
           test/contracts
           test/repositories
+          test/gateway_contract_test.dart
           test/p1_p2_api_failure_test.dart
           test/p1_p2_authority_cleanup_test.dart
           test/composite_dashboard_repository_test.dart
@@ -44,8 +45,11 @@ jobs:
           lib/state/controllers.dart
           lib/data/api/api_client.dart
           lib/data/api/gateways.dart
+          lib/features/alerts/alerts_screen.dart
+          lib/features/dashboard/server_dashboard_screen.dart
           lib/features/shell.dart
           test/repositories
+          test/gateway_contract_test.dart
           test/p1_p2_authority_cleanup_test.dart
           test/features/dashboard/server_dashboard_screen_test.dart
           test/shell_navigation_structure_test.dart
