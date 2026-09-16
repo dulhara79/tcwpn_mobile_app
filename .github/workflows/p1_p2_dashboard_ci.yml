@@ -6,6 +6,7 @@ on:
       - integration/clinanx-p1-p2-production-wiring-cleanup
       - fix/clinanx-p1-p2-verification-gate
       - integration/clinanx-p3-patient-overview
+      - integration/clinanx-p4-attention-events
   pull_request:
     branches:
       - main
