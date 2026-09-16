@@ -8,16 +8,19 @@ import '../../domain/contracts/contract_enums.dart';
 import '../../domain/contracts/patient_summary.dart';
 import '../../state/async_data_state.dart';
 import '../../state/dashboard_controller.dart';
+import '../attention_events/attention_event_detail_screen.dart';
 import '../patients/patient_overview_screen.dart';
 
 class ServerDashboardScreen extends StatelessWidget {
   final DashboardController controller;
   final ValueChanged<PatientSummary>? onOpenPatient;
+  final ValueChanged<AttentionEvent>? onOpenEvent;
 
   const ServerDashboardScreen({
     super.key,
     required this.controller,
     this.onOpenPatient,
+    this.onOpenEvent,
   });
 
   void _openPatient(BuildContext context, PatientSummary patient) {
@@ -33,6 +36,20 @@ class ServerDashboardScreen extends StatelessWidget {
           subjectId: patient.subjectId,
           displayId: patient.displayId,
         ),
+      ),
+    );
+  }
+
+  void _openEvent(BuildContext context, AttentionEvent event) {
+    final callback = onOpenEvent;
+    if (callback != null) {
+      callback(event);
+      return;
+    }
+    Navigator.push(
+      context,
+      MaterialPageRoute(
+        builder: (_) => AttentionEventDetailScreen.production(eventId: event.id),
       ),
     );
   }
@@ -95,7 +112,12 @@ class ServerDashboardScreen extends StatelessWidget {
                   ),
                 )
               else
-                ...snapshot.openEvents.map(_AttentionEventCard.new),
+                ...snapshot.openEvents.map(
+                  (event) => _AttentionEventCard(
+                    event,
+                    onTap: () => _openEvent(context, event),
+                  ),
+                ),
               const SizedBox(height: Ds.s6),
               const SectionLabel('Assigned patients'),
               if (snapshot.assignedPatients.isEmpty)
@@ -160,8 +182,9 @@ class _NoDashboardData extends StatelessWidget {
 
 class _AttentionEventCard extends StatelessWidget {
   final AttentionEvent event;
+  final VoidCallback onTap;
 
-  const _AttentionEventCard(this.event);
+  const _AttentionEventCard(this.event, {required this.onTap});
 
   @override
   Widget build(BuildContext context) {
@@ -169,6 +192,7 @@ class _AttentionEventCard extends StatelessWidget {
     return Padding(
       padding: const EdgeInsets.only(bottom: Ds.s3),
       child: Panel(
+        onTap: onTap,
         borderColor: Ds.amber.withValues(alpha: 0.35),
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,

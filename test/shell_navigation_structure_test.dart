@@ -19,4 +19,14 @@ void main() {
     expect(indexedStack!.trimLeft(), startsWith('ServerDashboardScreen('));
     expect(indexedStack, contains('AskCareScreen()'));
   });
+
+  test('P4 shell uses server Activity instead of legacy local Alerts', () {
+    final shell = File('lib/features/shell.dart').readAsStringSync();
+
+    expect(shell, contains('ActivityScreen.production()'));
+    expect(shell, contains("label: 'Activity'"));
+    expect(shell, isNot(contains('AlertsScreen()')));
+    expect(shell, isNot(contains("label: 'Alerts'")));
+    expect(shell, isNot(contains('roster.unacknowledgedCount')));
+  });
 }

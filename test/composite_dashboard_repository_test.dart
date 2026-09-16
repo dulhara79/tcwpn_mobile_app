@@ -21,6 +21,21 @@ class _Events implements AttentionEventRepository {
 
   @override
   Future<List<AttentionEvent>> openEvents() async => value;
+
+  @override
+  Future<List<AttentionEvent>> activity({String? subjectId}) =>
+      throw UnimplementedError();
+
+  @override
+  Future<AttentionEvent?> eventById(String eventId) =>
+      throw UnimplementedError();
+
+  @override
+  Future<AttentionEvent> acknowledge(String eventId) =>
+      throw UnimplementedError();
+
+  @override
+  Future<AttentionEvent> resolve(String eventId) => throw UnimplementedError();
 }
 
 void main() {

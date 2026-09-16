@@ -42,8 +42,8 @@ class AsyncDataState<T> {
   const AsyncDataState.sessionExpired({String? message})
       : this._(AsyncDataStatus.sessionExpired, message: message);
 
-  const AsyncDataState.forbidden({String? message})
-      : this._(AsyncDataStatus.forbidden, message: message);
+  const AsyncDataState.forbidden({T? data, String? message})
+      : this._(AsyncDataStatus.forbidden, data: data, message: message);
 
   const AsyncDataState.conflict({String? message})
       : this._(AsyncDataStatus.conflict, message: message);
