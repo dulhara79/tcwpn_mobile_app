@@ -5,7 +5,6 @@ import '../../core/design/theme.dart';
 import '../../core/design/tokens.dart';
 import '../../domain/contracts/attention_event.dart';
 import '../../domain/contracts/contract_enums.dart';
-import '../../domain/contracts/dashboard_snapshot.dart';
 import '../../domain/contracts/patient_summary.dart';
 import '../../state/async_data_state.dart';
 import '../../state/dashboard_controller.dart';

@@ -115,12 +115,12 @@ void main() {
       (tester) async {
     final unavailable = DashboardSnapshot(
       openEvents: const [],
-      assignedPatients: [
+      assignedPatients: const [
         PatientSummary(
           subjectId: 'subject-002',
           displayId: 'Patient B',
           fusionResultId: null,
-          currentAssessment: const CurrentAssessment(
+          currentAssessment: CurrentAssessment(
             score: null,
             tier: RiskTier.unknown,
             band: null,

@@ -4,6 +4,7 @@ on:
   push:
     branches:
       - integration/clinanx-p1-p2-production-wiring-cleanup
+      - fix/clinanx-p1-p2-verification-gate
   pull_request:
     branches:
       - main
@@ -24,6 +25,7 @@ jobs:
           flutter test
           test/contracts
           test/repositories
+          test/gateway_contract_test.dart
           test/p1_p2_api_failure_test.dart
           test/p1_p2_authority_cleanup_test.dart
           test/composite_dashboard_repository_test.dart
@@ -43,11 +45,29 @@ jobs:
           lib/state/controllers.dart
           lib/data/api/api_client.dart
           lib/data/api/gateways.dart
+          lib/features/alerts/alerts_screen.dart
+          lib/features/dashboard/server_dashboard_screen.dart
           lib/features/shell.dart
           test/repositories
+          test/gateway_contract_test.dart
           test/p1_p2_authority_cleanup_test.dart
           test/features/dashboard/server_dashboard_screen_test.dart
           test/shell_navigation_structure_test.dart
+      - name: Authority and forbidden-pattern checks
+        shell: bash
+        run: |
+          if find lib -type f -name '*.dart' -print0 | xargs -0 grep -nE '/v1/subjects/attach|_raiseIfEscalated|KpiDashboardScreen|ClinicalDashboardStats'; then
+            echo 'Forbidden retired authority/compatibility path found in active Dart.'
+            exit 1
+          fi
+          if grep -R -nE 'AlertBandX\.fromScore' lib/features/dashboard --include='*.dart'; then
+            echo 'Server Dashboard must not derive authoritative risk locally.'
+            exit 1
+          fi
+          if grep -nE "'/v1/me'|'/v1/clinicians/me/dashboard'|/assessment/latest'" lib/data/repositories/central_backend_repositories.dart; then
+            echo 'Unverified target endpoint was live-wired.'
+            exit 1
+          fi
       - name: Full tests visibility
         if: always()
         continue-on-error: true

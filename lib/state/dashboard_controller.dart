@@ -84,6 +84,10 @@ class DashboardController extends ChangeNotifier {
         _state = AsyncDataState<DashboardSnapshot>.conflict(
           message: e.message,
         );
+      case ApiFailure.notConfigured:
+        _state = AsyncDataState<DashboardSnapshot>.unavailable(
+          message: e.message,
+        );
       case ApiFailure.offline:
       case ApiFailure.timeout:
       case ApiFailure.server:
