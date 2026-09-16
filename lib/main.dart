@@ -94,11 +94,9 @@ class _ClinAnxAppState extends State<ClinAnxApp> {
       title: 'ClinAnx',
       debugShowCheckedModeBanner: false,
       theme: AppTheme.light,
-      builder: (context, child) => MediaQuery.withClampedTextScaling(
-        minScaleFactor: 0.9,
-        maxScaleFactor: 1.3,
-        child: ColoredBox(color: Ds.canvas, child: child!),
-      ),
+      // Respect the clinician's operating-system text size. Critical screens
+      // must adapt their layout instead of silently capping accessibility.
+      builder: (context, child) => ColoredBox(color: Ds.canvas, child: child!),
       home: !_consented
           ? ConsentGateScreen(
               appVersion: kAppVersion,
