@@ -36,6 +36,7 @@ jobs:
           test/dashboard_cache_test.dart
           test/patient_overview_controller_test.dart
           test/attention_events_controller_test.dart
+          test/attention_event_detail_controller_test.dart
           test/features/dashboard/server_dashboard_screen_test.dart
           test/features/patients/patient_overview_screen_test.dart
           test/features/patients/patients_screen_navigation_test.dart
@@ -64,6 +65,7 @@ jobs:
           test/p3_patient_overview_authority_test.dart
           test/patient_overview_controller_test.dart
           test/attention_events_controller_test.dart
+          test/attention_event_detail_controller_test.dart
           test/features/dashboard/server_dashboard_screen_test.dart
           test/features/patients/patient_overview_screen_test.dart
           test/features/patients/patients_screen_navigation_test.dart
