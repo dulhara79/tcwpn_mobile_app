@@ -3,11 +3,14 @@ import 'dart:convert';
 import 'package:shared_preferences/shared_preferences.dart';
 
 import '../../domain/contracts/dashboard_snapshot.dart';
+import 'clinician_storage_scope.dart';
 
 class DashboardCacheStore {
-  static const _key = 'server_dashboard_v1';
+  static const _logicalKey = 'server_dashboard_v1';
 
   const DashboardCacheStore();
+
+  String get _key => ClinicianStorageScope.keyForCurrent(_logicalKey);
 
   Future<void> save(DashboardSnapshot snapshot) async {
     final preferences = await SharedPreferences.getInstance();
