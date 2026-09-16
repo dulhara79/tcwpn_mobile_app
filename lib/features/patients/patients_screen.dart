@@ -52,9 +52,9 @@ class _PatientsScreenState extends State<PatientsScreen> {
     try {
       final normalized = localId.trim().toUpperCase();
       if (RegExp(r'^P_[A-F0-9]{16}$').hasMatch(normalized)) {
-        return gateway.resolveAppUserId(normalized);
+        return await gateway.resolveAppUserId(normalized);
       }
-      return gateway.resolveMrn(localId.trim());
+      return await gateway.resolveMrn(localId.trim());
     } finally {
       gateway.dispose();
     }
