@@ -53,6 +53,21 @@ jobs:
           test/p1_p2_authority_cleanup_test.dart
           test/features/dashboard/server_dashboard_screen_test.dart
           test/shell_navigation_structure_test.dart
+      - name: Authority and forbidden-pattern checks
+        shell: bash
+        run: |
+          if rg -n '/v1/subjects/attach|_raiseIfEscalated|KpiDashboardScreen|ClinicalDashboardStats' lib test; then
+            echo 'Forbidden retired authority/compatibility path found.'
+            exit 1
+          fi
+          if rg -n 'AlertBandX\.fromScore' lib/features/dashboard; then
+            echo 'Server Dashboard must not derive authoritative risk locally.'
+            exit 1
+          fi
+          if rg -n "'/v1/me'|'/v1/clinicians/me/dashboard'|/assessment/latest'" lib/data/repositories/central_backend_repositories.dart; then
+            echo 'Unverified target endpoint was live-wired.'
+            exit 1
+          fi
       - name: Full tests visibility
         if: always()
         continue-on-error: true
