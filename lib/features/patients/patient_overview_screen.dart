@@ -448,7 +448,7 @@ class _DataQualitySummary extends StatelessWidget {
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
               Text(
-                _assessmentStatusLabel(assessment.assessmentStatus),
+                'Assessment data status: ${_assessmentStatusLabel(assessment.assessmentStatus)}',
                 style: const TextStyle(
                   fontWeight: FontWeight.w700,
                   color: Ds.ink,
