@@ -52,7 +52,8 @@ void main() {
         .readAsStringSync();
 
     expect(source, contains("'/v1/attention-events'"));
-    expect(source, contains("'status': 'OPEN'"));
+    expect(source, contains("_listPath(status: 'OPEN')"));
+    expect(source, contains("'status': status"));
     expect(source, contains("'subject_id': subjectId"));
     expect(source, contains('/acknowledge'));
     expect(source, contains('/resolve'));
