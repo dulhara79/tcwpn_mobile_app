@@ -35,6 +35,7 @@ jobs:
           test/patient_overview_controller_test.dart
           test/features/dashboard/server_dashboard_screen_test.dart
           test/features/patients/patient_overview_screen_test.dart
+          test/features/patients/patients_screen_navigation_test.dart
           test/shell_navigation_structure_test.dart
       - name: Focused analysis
         run: >-
@@ -52,6 +53,7 @@ jobs:
           lib/features/alerts/alerts_screen.dart
           lib/features/dashboard/server_dashboard_screen.dart
           lib/features/patients/patient_overview_screen.dart
+          lib/features/patients/patients_screen.dart
           lib/features/shell.dart
           test/repositories
           test/gateway_contract_test.dart
@@ -59,6 +61,7 @@ jobs:
           test/patient_overview_controller_test.dart
           test/features/dashboard/server_dashboard_screen_test.dart
           test/features/patients/patient_overview_screen_test.dart
+          test/features/patients/patients_screen_navigation_test.dart
           test/shell_navigation_structure_test.dart
       - name: Authority and forbidden-pattern checks
         shell: bash
