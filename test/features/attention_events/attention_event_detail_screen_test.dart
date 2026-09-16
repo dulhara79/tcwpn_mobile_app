@@ -71,6 +71,16 @@ Future<AttentionEventDetailController> _controller(
   return controller;
 }
 
+Future<void> _scrollTo(WidgetTester tester, Finder target) async {
+  for (var i = 0; i < 6 && target.evaluate().isEmpty; i++) {
+    await tester.drag(find.byType(ListView), const Offset(0, -300));
+    await tester.pumpAndSettle();
+  }
+  expect(target, findsOneWidget);
+  await tester.ensureVisible(target);
+  await tester.pumpAndSettle();
+}
+
 void main() {
   testWidgets('detail shows canonical server identity and provenance',
       (tester) async {
@@ -96,8 +106,10 @@ void main() {
       MaterialApp(home: AttentionEventDetailScreen(controller: controller)),
     );
 
-    expect(find.widgetWithText(OutlinedButton, 'Acknowledge'), findsOneWidget);
     expect(find.widgetWithText(OutlinedButton, 'Resolve'), findsNothing);
+    final acknowledge = find.widgetWithText(OutlinedButton, 'Acknowledge');
+    await _scrollTo(tester, acknowledge);
+    expect(acknowledge, findsOneWidget);
   });
 
   testWidgets('ACKNOWLEDGED shows Resolve and server acknowledgement provenance',
@@ -113,9 +125,11 @@ void main() {
       MaterialApp(home: AttentionEventDetailScreen(controller: controller)),
     );
 
-    expect(find.widgetWithText(OutlinedButton, 'Resolve'), findsOneWidget);
-    expect(find.widgetWithText(OutlinedButton, 'Acknowledge'), findsNothing);
     expect(find.textContaining('DR001'), findsOneWidget);
+    expect(find.widgetWithText(OutlinedButton, 'Acknowledge'), findsNothing);
+    final resolve = find.widgetWithText(OutlinedButton, 'Resolve');
+    await _scrollTo(tester, resolve);
+    expect(resolve, findsOneWidget);
   });
 
   testWidgets('RESOLVED and UNKNOWN expose no mutation action', (tester) async {
@@ -140,6 +154,8 @@ void main() {
         MaterialApp(home: AttentionEventDetailScreen(controller: controller)),
       );
 
+      await tester.drag(find.byType(ListView), const Offset(0, -900));
+      await tester.pumpAndSettle();
       expect(find.widgetWithText(OutlinedButton, 'Acknowledge'), findsNothing);
       expect(find.widgetWithText(OutlinedButton, 'Resolve'), findsNothing);
     }
@@ -156,12 +172,12 @@ void main() {
       MaterialApp(home: AttentionEventDetailScreen(controller: controller)),
     );
 
-    await tester.tap(find.widgetWithText(OutlinedButton, 'Acknowledge'));
+    final acknowledge = find.widgetWithText(OutlinedButton, 'Acknowledge');
+    await _scrollTo(tester, acknowledge);
+    await tester.tap(acknowledge);
     await tester.pump();
 
-    final button = tester.widget<OutlinedButton>(
-      find.widgetWithText(OutlinedButton, 'Acknowledge'),
-    );
+    final button = tester.widget<OutlinedButton>(acknowledge);
     expect(button.onPressed, isNull);
 
     repository.acknowledgeCompleter!.complete(
@@ -187,7 +203,9 @@ void main() {
       ),
     );
 
-    await tester.tap(find.text('View patient'));
+    final viewPatient = find.text('View patient');
+    await _scrollTo(tester, viewPatient);
+    await tester.tap(viewPatient);
     await tester.pump();
 
     expect(openedSubject, 'subject-001');
