@@ -1,4 +1,4 @@
-name: P1 P2 dashboard checks
+name: ClinAnx integration and hardening checks
 
 on:
   push:
@@ -47,6 +47,7 @@ jobs:
           test/p7_accessibility_test.dart
           test/p7_release_config_test.dart
           test/p7_settings_truthfulness_test.dart
+          test/p7_hardening_authority_test.dart
           test/attention_notification_controller_test.dart
           test/attention_notification_store_test.dart
           test/composite_dashboard_repository_test.dart
@@ -66,7 +67,7 @@ jobs:
           test/shell_navigation_structure_test.dart
       - name: Focused analysis
         run: flutter analyze
-      - name: Authority and forbidden-pattern checks
+      - name: Authority, privacy and forbidden-pattern checks
         shell: bash
         run: |
           if find lib -type f -name '*.dart' -print0 | xargs -0 grep -nE '/v1/subjects/attach|_raiseIfEscalated|KpiDashboardScreen|ClinicalDashboardStats'; then
@@ -111,11 +112,20 @@ jobs:
             echo 'P6 notification delivery must not manufacture clinical authority.'
             exit 1
           fi
-      - name: Full tests visibility
-        if: always()
-        continue-on-error: true
+          if grep -nE "static const _kRoster = 'roster_v2'|static const _key = 'server_dashboard_v1'" \
+            lib/data/local/stores.dart lib/data/local/dashboard_cache.dart 2>/dev/null; then
+            echo 'Clinical cache key lost its clinician namespace.'
+            exit 1
+          fi
+          if grep -n 'MediaQuery.withClampedTextScaling' lib/main.dart; then
+            echo 'Global text scaling must not be capped for clinician accessibility.'
+            exit 1
+          fi
+          if grep -nE "DEMO_DATA.*defaultValue: true|defaultValue: true.*DEMO_DATA" lib/core/config/env.dart; then
+            echo 'Demo data must require explicit opt-in.'
+            exit 1
+          fi
+      - name: Full tests
         run: flutter test
-      - name: Full analysis visibility
-        if: always()
-        continue-on-error: true
+      - name: Full analysis
         run: flutter analyze
