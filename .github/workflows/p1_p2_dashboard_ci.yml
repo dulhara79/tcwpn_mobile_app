@@ -34,6 +34,7 @@ jobs:
           test/dashboard_cache_test.dart
           test/patient_overview_controller_test.dart
           test/features/dashboard/server_dashboard_screen_test.dart
+          test/features/patients/patient_overview_screen_test.dart
           test/shell_navigation_structure_test.dart
       - name: Focused analysis
         run: >-
@@ -50,12 +51,14 @@ jobs:
           lib/data/api/gateways.dart
           lib/features/alerts/alerts_screen.dart
           lib/features/dashboard/server_dashboard_screen.dart
+          lib/features/patients/patient_overview_screen.dart
           lib/features/shell.dart
           test/repositories
           test/gateway_contract_test.dart
           test/p1_p2_authority_cleanup_test.dart
           test/patient_overview_controller_test.dart
           test/features/dashboard/server_dashboard_screen_test.dart
+          test/features/patients/patient_overview_screen_test.dart
           test/shell_navigation_structure_test.dart
       - name: Authority and forbidden-pattern checks
         shell: bash
@@ -64,8 +67,8 @@ jobs:
             echo 'Forbidden retired authority/compatibility path found in active Dart.'
             exit 1
           fi
-          if grep -R -nE 'AlertBandX\.fromScore' lib/features/dashboard --include='*.dart'; then
-            echo 'Server Dashboard must not derive authoritative risk locally.'
+          if grep -R -nE 'AlertBandX\.fromScore' lib/features/dashboard lib/features/patients/patient_overview_screen.dart --include='*.dart' 2>/dev/null; then
+            echo 'Server-backed clinician views must not derive authoritative risk locally.'
             exit 1
           fi
           if grep -nE "'/v1/me'|'/v1/clinicians/me/dashboard'|/assessment/latest'" lib/data/repositories/central_backend_repositories.dart; then
