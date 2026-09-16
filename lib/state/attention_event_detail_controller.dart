@@ -87,7 +87,7 @@ class AttentionEventDetailController extends ChangeNotifier {
         await _handleMutationFailure(e, current);
       }
     } catch (_) {
-      _state = AsyncDataState<AttentionEvent>.error(
+      _state = const AsyncDataState<AttentionEvent>.error(
         message: 'The attention-event action could not be completed.',
       );
       _mutationMessage =
