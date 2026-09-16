@@ -171,4 +171,28 @@ void main() {
     expect(opened!.subjectId, 'subject-001');
     expect(opened!.displayId, 'Patient A');
   });
+
+  testWidgets('opens event detail with the same server event id', (tester) async {
+    final controller = DashboardController(
+      repository: _FakeDashboardRepository(_snapshot()),
+    );
+    await controller.load();
+    AttentionEvent? opened;
+
+    await tester.pumpWidget(
+      MaterialApp(
+        home: ServerDashboardScreen(
+          controller: controller,
+          onOpenEvent: (event) => opened = event,
+        ),
+      ),
+    );
+
+    await tester.tap(find.text('evt-001'));
+    await tester.pump();
+
+    expect(opened, isNotNull);
+    expect(opened!.id, 'evt-001');
+    expect(opened!.subjectId, 'subject-001');
+  });
 }
