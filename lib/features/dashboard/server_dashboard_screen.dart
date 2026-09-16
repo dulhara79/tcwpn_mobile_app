@@ -8,14 +8,34 @@ import '../../domain/contracts/contract_enums.dart';
 import '../../domain/contracts/patient_summary.dart';
 import '../../state/async_data_state.dart';
 import '../../state/dashboard_controller.dart';
+import '../patients/patient_overview_screen.dart';
 
 class ServerDashboardScreen extends StatelessWidget {
   final DashboardController controller;
+  final ValueChanged<PatientSummary>? onOpenPatient;
 
   const ServerDashboardScreen({
     super.key,
     required this.controller,
+    this.onOpenPatient,
   });
+
+  void _openPatient(BuildContext context, PatientSummary patient) {
+    final callback = onOpenPatient;
+    if (callback != null) {
+      callback(patient);
+      return;
+    }
+    Navigator.push(
+      context,
+      MaterialPageRoute(
+        builder: (_) => PatientOverviewScreen.production(
+          subjectId: patient.subjectId,
+          displayId: patient.displayId,
+        ),
+      ),
+    );
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -86,7 +106,12 @@ class ServerDashboardScreen extends StatelessWidget {
                   ),
                 )
               else
-                ...snapshot.assignedPatients.map(_PatientSummaryCard.new),
+                ...snapshot.assignedPatients.map(
+                  (patient) => _PatientSummaryCard(
+                    patient,
+                    onTap: () => _openPatient(context, patient),
+                  ),
+                ),
               const SizedBox(height: Ds.s6),
               const DecisionSupportNotice(),
             ],
@@ -192,8 +217,12 @@ class _AttentionEventCard extends StatelessWidget {
 
 class _PatientSummaryCard extends StatelessWidget {
   final PatientSummary patient;
+  final VoidCallback onTap;
 
-  const _PatientSummaryCard(this.patient);
+  const _PatientSummaryCard(
+    this.patient, {
+    required this.onTap,
+  });
 
   @override
   Widget build(BuildContext context) {
@@ -205,6 +234,7 @@ class _PatientSummaryCard extends StatelessWidget {
     return Padding(
       padding: const EdgeInsets.only(bottom: Ds.s3),
       child: Panel(
+        onTap: onTap,
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
