@@ -12,6 +12,7 @@ on:
       - integration/clinanx-p5c-evidence-clinician-assessment
       - integration/clinanx-p6-notifications
       - integration/clinanx-p6-client-first-contract
+      - integration/clinanx-p7-hardening
   pull_request:
     branches:
       - main
