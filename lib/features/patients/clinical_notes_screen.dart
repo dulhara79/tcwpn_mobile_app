@@ -40,6 +40,7 @@ class _ClinicalNotesScreenState extends State<ClinicalNotesScreen> {
   late final bool _ownsController;
   final _text = TextEditingController();
   final _noteType = TextEditingController(text: 'Psychiatry note');
+  String? _editingNoteId;
 
   @override
   void initState() {
@@ -73,11 +74,41 @@ class _ClinicalNotesScreenState extends State<ClinicalNotesScreen> {
   Future<void> _saveDraft() async {
     final value = _text.text.trim();
     if (value.isEmpty) return;
-    await _controller.saveDraft(
-      text: value,
-      noteType: _noteType.text,
-    );
-    _text.clear();
+    final editingId = _editingNoteId;
+    if (editingId == null) {
+      await _controller.saveDraft(
+        text: value,
+        noteType: _noteType.text,
+      );
+    } else {
+      await _controller.updateNote(
+        editingId,
+        text: value,
+        noteType: _noteType.text,
+      );
+    }
+    if (!mounted) return;
+    setState(() {
+      _editingNoteId = null;
+      _text.clear();
+      _noteType.text = 'Psychiatry note';
+    });
+  }
+
+  void _editNote(ClinicalNote note) {
+    setState(() {
+      _editingNoteId = note.id;
+      _text.text = note.text;
+      _noteType.text = note.noteType;
+    });
+  }
+
+  void _cancelEdit() {
+    setState(() {
+      _editingNoteId = null;
+      _text.clear();
+      _noteType.text = 'Psychiatry note';
+    });
   }
 
   @override
@@ -101,6 +132,13 @@ class _ClinicalNotesScreenState extends State<ClinicalNotesScreen> {
             ),
           ),
           const SizedBox(height: 12),
+          if (_editingNoteId != null) ...[
+            const Text(
+              'Editing saved note',
+              style: TextStyle(fontWeight: FontWeight.w700),
+            ),
+            const SizedBox(height: 8),
+          ],
           TextField(
             key: const Key('clinical-note-text'),
             controller: _text,
@@ -120,9 +158,24 @@ class _ClinicalNotesScreenState extends State<ClinicalNotesScreen> {
             ),
           ),
           const SizedBox(height: 8),
-          FilledButton(
-            onPressed: _saveDraft,
-            child: const Text('Save draft'),
+          Row(
+            children: [
+              Expanded(
+                child: FilledButton(
+                  onPressed: _saveDraft,
+                  child: Text(
+                    _editingNoteId == null ? 'Save draft' : 'Update draft',
+                  ),
+                ),
+              ),
+              if (_editingNoteId != null) ...[
+                const SizedBox(width: 8),
+                TextButton(
+                  onPressed: _cancelEdit,
+                  child: const Text('Cancel'),
+                ),
+              ],
+            ],
           ),
           if (_controller.message != null) ...[
             const SizedBox(height: 8),
@@ -140,6 +193,7 @@ class _ClinicalNotesScreenState extends State<ClinicalNotesScreen> {
                 child: _NoteCard(
                   note: note,
                   submitting: _controller.submittingNoteId == note.id,
+                  onEdit: () => _editNote(note),
                   onSubmit: () => _controller.submit(note.id),
                 ),
               ),
@@ -153,11 +207,13 @@ class _ClinicalNotesScreenState extends State<ClinicalNotesScreen> {
 class _NoteCard extends StatelessWidget {
   final ClinicalNote note;
   final bool submitting;
+  final VoidCallback onEdit;
   final VoidCallback onSubmit;
 
   const _NoteCard({
     required this.note,
     required this.submitting,
+    required this.onEdit,
     required this.onSubmit,
   });
 
@@ -208,17 +264,26 @@ class _NoteCard extends StatelessWidget {
               Text(note.lastAnalysisError!),
             ],
             const SizedBox(height: 8),
-            OutlinedButton(
-              onPressed: submitting ? null : onSubmit,
-              child: Text(
-                submitting
-                    ? 'Submitting…'
-                    : note.status == ClinicalNoteStatus.analysisFailed
-                        ? 'Retry analysis'
-                        : note.status == ClinicalNoteStatus.analysed
-                            ? 'Re-analyse'
-                            : 'Analyse note',
-              ),
+            Wrap(
+              spacing: 8,
+              children: [
+                TextButton(
+                  onPressed: submitting ? null : onEdit,
+                  child: const Text('Edit'),
+                ),
+                OutlinedButton(
+                  onPressed: submitting ? null : onSubmit,
+                  child: Text(
+                    submitting
+                        ? 'Submitting…'
+                        : note.status == ClinicalNoteStatus.analysisFailed
+                            ? 'Retry analysis'
+                            : note.status == ClinicalNoteStatus.analysed
+                                ? 'Re-analyse'
+                                : 'Analyse note',
+                  ),
+                ),
+              ],
             ),
           ],
         ),
