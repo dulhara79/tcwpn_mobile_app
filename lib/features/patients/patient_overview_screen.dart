@@ -11,8 +11,10 @@ import '../../domain/contracts/contract_enums.dart';
 import '../../state/async_data_state.dart';
 import '../../state/patient_overview_controller.dart';
 import 'clinical_notes_screen.dart';
+import 'clinician_assessment_screen.dart';
 import 'data_quality_screen.dart';
 import 'signals_contributions_screen.dart';
+import 'supporting_evidence_screen.dart';
 import 'timeline_screen.dart';
 
 typedef OpenClinicalNotes = void Function(
@@ -29,6 +31,8 @@ class PatientOverviewScreen extends StatefulWidget {
   final ValueChanged<AssessmentSummary>? onOpenDataQuality;
   final ValueChanged<String>? onOpenTimeline;
   final OpenClinicalNotes? onOpenClinicalNotes;
+  final ValueChanged<AssessmentSummary>? onOpenSupportingEvidence;
+  final ValueChanged<AssessmentSummary>? onOpenClinicianAssessment;
 
   const PatientOverviewScreen({
     super.key,
@@ -39,6 +43,8 @@ class PatientOverviewScreen extends StatefulWidget {
     this.onOpenDataQuality,
     this.onOpenTimeline,
     this.onOpenClinicalNotes,
+    this.onOpenSupportingEvidence,
+    this.onOpenClinicianAssessment,
   }) : subjectId = null;
 
   const PatientOverviewScreen.production({
@@ -50,6 +56,8 @@ class PatientOverviewScreen extends StatefulWidget {
     this.onOpenDataQuality,
     this.onOpenTimeline,
     this.onOpenClinicalNotes,
+    this.onOpenSupportingEvidence,
+    this.onOpenClinicianAssessment,
   }) : controller = null;
 
   @override
@@ -199,6 +207,34 @@ class _PatientOverviewScreenState extends State<PatientOverviewScreen> {
               ),
             ),
             const SizedBox(height: Ds.s6),
+            const SectionLabel('Decision support & review'),
+            Panel(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  const Text(
+                    'Supporting evidence is downstream decision support. Clinician judgement is recorded separately from model output.',
+                    style: TextStyle(
+                      fontSize: 12,
+                      height: 1.4,
+                      color: Ds.inkMuted,
+                    ),
+                  ),
+                  const SizedBox(height: Ds.s2),
+                  TextButton.icon(
+                    onPressed: () => _openSupportingEvidence(assessment),
+                    icon: const Icon(Icons.menu_book_outlined, size: 16),
+                    label: const Text('View supporting evidence'),
+                  ),
+                  TextButton.icon(
+                    onPressed: () => _openClinicianAssessment(assessment),
+                    icon: const Icon(Icons.fact_check_outlined, size: 16),
+                    label: const Text('Record clinician assessment'),
+                  ),
+                ],
+              ),
+            ),
+            const SizedBox(height: Ds.s6),
             const DecisionSupportNotice(),
           ],
         ),
@@ -278,6 +314,43 @@ class _PatientOverviewScreenState extends State<PatientOverviewScreen> {
           clinicianId: Session.clinicianId ?? '',
           refreshCanonicalAssessment: () =>
               _controller.load(showLoading: false),
+          displayId: widget.displayId,
+        ),
+      ),
+    );
+  }
+
+  void _openSupportingEvidence(AssessmentSummary assessment) {
+    final callback = widget.onOpenSupportingEvidence;
+    if (callback != null) {
+      callback(assessment);
+      return;
+    }
+
+    Navigator.push(
+      context,
+      MaterialPageRoute(
+        builder: (_) => SupportingEvidenceScreen.production(
+          subjectId: assessment.subjectId,
+          displayId: widget.displayId,
+        ),
+      ),
+    );
+  }
+
+  void _openClinicianAssessment(AssessmentSummary assessment) {
+    final callback = widget.onOpenClinicianAssessment;
+    if (callback != null) {
+      callback(assessment);
+      return;
+    }
+
+    Navigator.push(
+      context,
+      MaterialPageRoute(
+        builder: (_) => ClinicianAssessmentScreen.production(
+          assessment: assessment,
+          clinicianId: Session.clinicianId ?? '',
           displayId: widget.displayId,
         ),
       ),
