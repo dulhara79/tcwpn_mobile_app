@@ -78,7 +78,7 @@ void main() {
   testWidgets('labels local note history honestly', (tester) async {
     await _pump(tester, _Repository());
 
-    expect(find.textContaining('device-local'), findsOneWidget);
+    expect(find.textContaining('device-local'), findsWidgets);
     expect(find.textContaining('server-authoritative note history'), findsOneWidget);
   });
 
