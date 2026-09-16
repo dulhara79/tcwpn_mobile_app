@@ -4,6 +4,7 @@ on:
   push:
     branches:
       - integration/clinanx-p1-p2-production-wiring-cleanup
+      - fix/clinanx-p1-p2-verification-gate
   pull_request:
     branches:
       - main
