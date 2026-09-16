@@ -163,7 +163,10 @@ class _AppShellState extends State<AppShell> with WidgetsBindingObserver {
   void dispose() {
     WidgetsBinding.instance.removeObserver(this);
     _stopNotificationPolling();
-    unawaited(_notificationOpenSubscription?.cancel());
+    final subscription = _notificationOpenSubscription;
+    if (subscription != null) {
+      unawaited(subscription.cancel());
+    }
     if (_ownsDashboardController) {
       _dashboardController.dispose();
     }
