@@ -47,12 +47,16 @@ void main() {
     expect(source, isNot(contains('reason: event.reason')));
   });
 
-  test('live attention-event HTTP adapter remains contract gated', () {
+  test('live attention-event HTTP adapter follows frozen client-first contract', () {
     final source = File('lib/data/repositories/central_backend_repositories.dart')
         .readAsStringSync();
 
-    expect(source, contains("_contractGate('attention-events-open-contract')"));
-    expect(source, contains("_contractGate('attention-event-detail-contract')"));
-    expect(source, isNot(contains("'/v1/attention-events")));
+    expect(source, contains("'/v1/attention-events'"));
+    expect(source, contains("'status': 'OPEN'"));
+    expect(source, contains("'subject_id': subjectId"));
+    expect(source, contains('/acknowledge'));
+    expect(source, contains('/resolve'));
+    expect(source, isNot(contains('DateTime.now()')));
+    expect(source, isNot(contains('SecureStore.clinicianId')));
   });
 }

@@ -74,8 +74,8 @@ jobs:
             echo 'Clinician event flows must not call model prediction directly.'
             exit 1
           fi
-          if grep -nE "'/v1/me'|'/v1/clinicians/me/dashboard'|/assessment/latest'|['\"]/attention-events|['\"]/acknowledge|['\"]/resolve" lib/data/repositories/central_backend_repositories.dart; then
-            echo 'Unverified target endpoint was live-wired.'
+          if grep -nE "'/v1/me'|'/v1/clinicians/me/dashboard'|/assessment/latest'" lib/data/repositories/central_backend_repositories.dart; then
+            echo 'Unverified non-Phase-6 target endpoint was live-wired.'
             exit 1
           fi
           if grep -n 'roster\.unacknowledgedCount' lib/features/shell.dart; then

@@ -27,14 +27,17 @@ void main() {
     expect(source, contains('repository.eventById(eventId)'));
   });
 
-  test('P4 production adapter contains no guessed attention-event route', () {
+  test('P4 production adapter uses the frozen client-first AttentionEvent routes',
+      () {
     final source = File('lib/data/repositories/central_backend_repositories.dart')
         .readAsStringSync();
 
-    expect(source, isNot(contains("'/attention-events")));
-    expect(source, isNot(contains("'/acknowledge")));
-    expect(source, isNot(contains("'/resolve")));
-    expect(source, contains("_contractGate('attention-event-detail-contract')"));
+    expect(source, contains("'/v1/attention-events'"));
+    expect(source, contains('/acknowledge'));
+    expect(source, contains('/resolve'));
+    expect(source, contains('AttentionEvent.fromJson'));
+    expect(source, isNot(contains('DateTime.now()')));
+    expect(source, isNot(contains('SecureStore.clinicianId')));
   });
 
   test('active controllers still do not mint authoritative ClinicalAlert events',
