@@ -84,10 +84,14 @@ void main() {
     expect(find.text('Activity'), findsOneWidget);
     expect(find.text('OPEN'), findsWidgets);
     expect(find.text('ACKNOWLEDGED'), findsWidgets);
-    expect(find.text('RESOLVED'), findsWidgets);
-    expect(find.text('UNKNOWN'), findsWidgets);
     expect(find.text('open-1'), findsOneWidget);
     expect(find.text('ack-1'), findsOneWidget);
+
+    await tester.drag(find.byType(ListView), const Offset(0, -800));
+    await tester.pumpAndSettle();
+
+    expect(find.text('RESOLVED'), findsWidgets);
+    expect(find.text('UNKNOWN'), findsWidgets);
     expect(find.text('resolved-1'), findsOneWidget);
     expect(find.text('unknown-1'), findsOneWidget);
   });
