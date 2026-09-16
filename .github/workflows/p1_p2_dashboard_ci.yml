@@ -29,6 +29,7 @@ jobs:
           test/gateway_contract_test.dart
           test/p1_p2_api_failure_test.dart
           test/p1_p2_authority_cleanup_test.dart
+          test/p3_patient_overview_authority_test.dart
           test/composite_dashboard_repository_test.dart
           test/dashboard_controller_test.dart
           test/dashboard_cache_test.dart
@@ -58,6 +59,7 @@ jobs:
           test/repositories
           test/gateway_contract_test.dart
           test/p1_p2_authority_cleanup_test.dart
+          test/p3_patient_overview_authority_test.dart
           test/patient_overview_controller_test.dart
           test/features/dashboard/server_dashboard_screen_test.dart
           test/features/patients/patient_overview_screen_test.dart
@@ -72,6 +74,10 @@ jobs:
           fi
           if grep -R -nE 'AlertBandX\.fromScore' lib/features/dashboard lib/features/patients/patient_overview_screen.dart --include='*.dart' 2>/dev/null; then
             echo 'Server-backed clinician views must not derive authoritative risk locally.'
+            exit 1
+          fi
+          if grep -R -nE "['\"]/?predict['\"]" lib/features/patients/patient_overview_screen.dart lib/state/patient_overview_controller.dart 2>/dev/null; then
+            echo 'P3 must not call C3 prediction directly.'
             exit 1
           fi
           if grep -nE "'/v1/me'|'/v1/clinicians/me/dashboard'|/assessment/latest'" lib/data/repositories/central_backend_repositories.dart; then
