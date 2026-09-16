@@ -45,7 +45,7 @@ void main() {
     await _pump(tester, controller);
 
     expect(find.text('Supporting Evidence'), findsOneWidget);
-    expect(find.textContaining('general evidence support'), findsOneWidget);
+    expect(find.textContaining('General evidence support'), findsOneWidget);
     expect(find.textContaining('fusion score'), findsOneWidget);
     expect(find.textContaining('clinical notes'), findsOneWidget);
     expect(find.textContaining('not sent to CARE-AnxRAG'), findsOneWidget);
