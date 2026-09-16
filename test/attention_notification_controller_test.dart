@@ -127,8 +127,12 @@ class _Repository implements AttentionEventRepository {
   Future<List<AttentionEvent>> activity({String? subjectId}) async => events;
 
   @override
-  Future<AttentionEvent?> eventById(String eventId) async =>
-      events.where((e) => e.id == eventId).firstOrNull;
+  Future<AttentionEvent?> eventById(String eventId) async {
+    for (final event in events) {
+      if (event.id == eventId) return event;
+    }
+    return null;
+  }
 
   @override
   Future<AttentionEvent> acknowledge(String eventId) => throw UnimplementedError();
