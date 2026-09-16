@@ -76,7 +76,7 @@ void main() {
     expect(find.text('High'), findsOneWidget);
     expect(controller.selectedTier, isNull,
         reason: 'the model tier must not preselect the clinician label');
-    expect(find.textContaining('separate from the model'), findsOneWidget);
+    expect(find.textContaining('stored separately from the model'), findsOneWidget);
   });
 
   testWidgets('save is disabled until a clinician tier is selected', (tester) async {
