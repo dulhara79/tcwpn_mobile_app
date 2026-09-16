@@ -5,6 +5,7 @@ on:
     branches:
       - integration/clinanx-p1-p2-production-wiring-cleanup
       - fix/clinanx-p1-p2-verification-gate
+      - integration/clinanx-p3-patient-overview
   pull_request:
     branches:
       - main
@@ -31,6 +32,7 @@ jobs:
           test/composite_dashboard_repository_test.dart
           test/dashboard_controller_test.dart
           test/dashboard_cache_test.dart
+          test/patient_overview_controller_test.dart
           test/features/dashboard/server_dashboard_screen_test.dart
           test/shell_navigation_structure_test.dart
       - name: Focused analysis
@@ -42,6 +44,7 @@ jobs:
           lib/data/local/dashboard_cache.dart
           lib/state/async_data_state.dart
           lib/state/dashboard_controller.dart
+          lib/state/patient_overview_controller.dart
           lib/state/controllers.dart
           lib/data/api/api_client.dart
           lib/data/api/gateways.dart
@@ -51,6 +54,7 @@ jobs:
           test/repositories
           test/gateway_contract_test.dart
           test/p1_p2_authority_cleanup_test.dart
+          test/patient_overview_controller_test.dart
           test/features/dashboard/server_dashboard_screen_test.dart
           test/shell_navigation_structure_test.dart
       - name: Authority and forbidden-pattern checks
