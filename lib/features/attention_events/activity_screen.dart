@@ -92,6 +92,15 @@ class _ActivityScreenState extends State<ActivityScreen> {
       return const Center(child: CircularProgressIndicator());
     }
 
+    if (state.status == AsyncDataStatus.empty) {
+      return const EmptyState(
+        icon: Icons.history_rounded,
+        title: 'No server attention-event activity',
+        body:
+            'No persistent attention events were returned for the current clinician scope.',
+      );
+    }
+
     final events = state.data;
     if (events == null) {
       final title = switch (state.status) {
@@ -112,15 +121,6 @@ class _ActivityScreenState extends State<ActivityScreen> {
         onAction: state.status == AsyncDataStatus.sessionExpired
             ? null
             : () => _controller.load(),
-      );
-    }
-
-    if (events.isEmpty || state.status == AsyncDataStatus.empty) {
-      return const EmptyState(
-        icon: Icons.history_rounded,
-        title: 'No server attention-event activity',
-        body:
-            'No persistent attention events were returned for the current clinician scope.',
       );
     }
 
