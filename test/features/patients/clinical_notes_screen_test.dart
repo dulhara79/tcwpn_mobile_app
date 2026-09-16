@@ -94,6 +94,24 @@ void main() {
     expect(find.text('Draft'), findsOneWidget);
   });
 
+  testWidgets('clinician can edit an existing local note without duplicating it',
+      (tester) async {
+    final controller = await _pump(tester, _Repository());
+    await controller.saveDraft(text: 'Original note', noteType: 'Psychiatry note');
+    await tester.pump();
+
+    await tester.tap(find.text('Edit'));
+    await tester.pump();
+    await tester.enterText(find.byKey(const Key('clinical-note-text')), 'Updated note');
+    await tester.tap(find.text('Update draft'));
+    await tester.pump();
+
+    expect(controller.notes, hasLength(1));
+    expect(controller.notes.single.text, 'Updated note');
+    expect(find.textContaining('Updated note'), findsOneWidget);
+    expect(find.textContaining('Original note'), findsNothing);
+  });
+
   testWidgets('failed analysis preserves note and exposes retry', (tester) async {
     final repository = _Repository()
       ..failure = const ApiException(kind: ApiFailure.offline);
