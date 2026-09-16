@@ -11,6 +11,7 @@ on:
       - integration/clinanx-p5b-timeline-clinical-notes
       - integration/clinanx-p5c-evidence-clinician-assessment
       - integration/clinanx-p6-notifications
+      - integration/clinanx-p6-client-first-contract
   pull_request:
     branches:
       - main
