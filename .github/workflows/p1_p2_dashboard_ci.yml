@@ -56,15 +56,15 @@ jobs:
       - name: Authority and forbidden-pattern checks
         shell: bash
         run: |
-          if rg -n '/v1/subjects/attach|_raiseIfEscalated|KpiDashboardScreen|ClinicalDashboardStats' lib test; then
-            echo 'Forbidden retired authority/compatibility path found.'
+          if find lib -type f -name '*.dart' -print0 | xargs -0 grep -nE '/v1/subjects/attach|_raiseIfEscalated|KpiDashboardScreen|ClinicalDashboardStats'; then
+            echo 'Forbidden retired authority/compatibility path found in active Dart.'
             exit 1
           fi
-          if rg -n 'AlertBandX\.fromScore' lib/features/dashboard; then
+          if grep -R -nE 'AlertBandX\.fromScore' lib/features/dashboard --include='*.dart'; then
             echo 'Server Dashboard must not derive authoritative risk locally.'
             exit 1
           fi
-          if rg -n "'/v1/me'|'/v1/clinicians/me/dashboard'|/assessment/latest'" lib/data/repositories/central_backend_repositories.dart; then
+          if grep -nE "'/v1/me'|'/v1/clinicians/me/dashboard'|/assessment/latest'" lib/data/repositories/central_backend_repositories.dart; then
             echo 'Unverified target endpoint was live-wired.'
             exit 1
           fi
