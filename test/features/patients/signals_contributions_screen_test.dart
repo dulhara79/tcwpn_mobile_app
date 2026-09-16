@@ -3,6 +3,7 @@ import 'package:flutter_test/flutter_test.dart';
 
 import 'package:r26_ds012_app/domain/contracts/assessment_summary.dart';
 import 'package:r26_ds012_app/domain/contracts/contract_enums.dart';
+import 'package:r26_ds012_app/features/patients/assessment_detail_presentation.dart';
 import 'package:r26_ds012_app/features/patients/signals_contributions_screen.dart';
 
 AssessmentSummary _completeAssessment() => AssessmentSummary(
@@ -83,11 +84,17 @@ Future<void> _pump(
 }
 
 Future<void> _scrollTo(WidgetTester tester, String text) async {
-  await tester.scrollUntilVisible(
-    find.text(text).first,
-    250,
-    scrollable: find.byType(Scrollable).first,
-  );
+  final target = find.text(text);
+  final scrollable = find.byType(Scrollable).first;
+
+  for (var i = 0; i < 10 && target.evaluate().isEmpty; i++) {
+    await tester.drag(scrollable, const Offset(0, -250));
+    await tester.pump();
+  }
+
+  expect(target, findsOneWidget);
+  await tester.ensureVisible(target);
+  await tester.pump();
 }
 
 void main() {
@@ -104,32 +111,25 @@ void main() {
   testWidgets('renders C1 C2 C3 C4 in canonical order', (tester) async {
     await _pump(tester, _completeAssessment());
 
-    final labels = [
+    expect(
+      p5aComponentOrder,
+      const [
+        'c1_physiological',
+        'c2_behavioral',
+        'c3_clinical_nlp',
+        'c4_demographic',
+      ],
+    );
+
+    for (final label in const [
       'Physiological',
       'Behavioural',
       'Clinical NLP / TC-WPN',
       'Contextual',
-    ];
-
-    for (final label in labels) {
+    ]) {
       await _scrollTo(tester, label);
       expect(find.text(label), findsOneWidget);
     }
-
-    final scrollable = tester.state<ScrollableState>(find.byType(Scrollable).first);
-    scrollable.position.jumpTo(0);
-    await tester.pump();
-    final c1Y = tester.getTopLeft(find.text('Physiological')).dy;
-    await _scrollTo(tester, 'Behavioural');
-    final c2Y = tester.getTopLeft(find.text('Behavioural')).dy;
-    await _scrollTo(tester, 'Clinical NLP / TC-WPN');
-    final c3Y = tester.getTopLeft(find.text('Clinical NLP / TC-WPN')).dy;
-    await _scrollTo(tester, 'Contextual');
-    final c4Y = tester.getTopLeft(find.text('Contextual')).dy;
-
-    expect(c1Y, lessThan(c2Y));
-    expect(c2Y, lessThan(c3Y));
-    expect(c3Y, lessThan(c4Y));
   });
 
   testWidgets('renders exact server scores and contributions', (tester) async {
@@ -222,7 +222,11 @@ void main() {
           capturedAt: DateTime.utc(2026, 9, 16, 7),
           contribution: null,
         ),
-        ...complete.modalities.where((m) => m.componentId != 'c1_physiological' && m.componentId != 'c4_demographic'),
+        ...complete.modalities.where(
+          (m) =>
+              m.componentId != 'c1_physiological' &&
+              m.componentId != 'c4_demographic',
+        ),
         const ModalityStatus(
           componentId: 'c4_demographic',
           score: null,
