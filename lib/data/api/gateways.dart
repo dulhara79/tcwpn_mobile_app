@@ -33,10 +33,6 @@ import '../../domain/models.dart';
 import '../../domain/evidence.dart';
 import 'api_client.dart';
 
-// ─────────────────────────────────────────────────────────────────────────────
-// Central Backend
-// ─────────────────────────────────────────────────────────────────────────────
-
 class CentralBackendGateway {
   final ApiClient _api;
 
@@ -44,10 +40,6 @@ class CentralBackendGateway {
       : _api = api ??
             ApiClient(
               Env.backendBase,
-              // Legacy backend operations still use the shared prototype token.
-              // Clinician-scoped target reads are implemented through a separate
-              // session-JWT client so this compatibility path can be retired
-              // without breaking note ingestion while the backend migrates.
               bearer: () => Env.backendToken,
             );
 
@@ -58,8 +50,6 @@ class CentralBackendGateway {
       return null;
     }
   }
-
-  // ── Enrolment ─────────────────────────────────────────────────────────────
 
   Future<EnrolmentResult> enrol({
     required String mrn,
@@ -79,8 +69,7 @@ class CentralBackendGateway {
   Future<String?> resolveAppUserId(String appUserId) async {
     try {
       final json = await _api.get(
-        '/v1/subjects/resolve?app_user_id='
-        '${Uri.encodeQueryComponent(appUserId)}',
+        '/v1/subjects/resolve?app_user_id=${Uri.encodeQueryComponent(appUserId)}',
         timeout: Env.quickTimeout,
       );
       final id = json['subject_id'];
@@ -118,8 +107,6 @@ class CentralBackendGateway {
           },
           timeout: Env.quickTimeout);
 
-  // ── Clinical note ─────────────────────────────────────────────────────────
-
   Future<ClinicalNoteIngestResult> submitNote({
     required String subjectId,
     required String noteText,
@@ -148,8 +135,6 @@ class CentralBackendGateway {
     );
   }
 
-  // ── Fusion and egress ─────────────────────────────────────────────────────
-
   Future<void> runFusion(String subjectId, {String trigger = 'manual'}) =>
       _api.post('/v1/fusion/run', {
         'subject_id': subjectId,
@@ -173,13 +158,22 @@ class CentralBackendGateway {
     }
   }
 
+  /// Raw transport retained for compatibility with older gateway-level tests.
+  /// P5C production code consumes it only through the typed EvidenceRepository.
   Future<Map<String, dynamic>> evidence({
     required String subjectId,
     required String question,
-  }) =>
-      _api.post('/v1/doctor/patients/$subjectId/evidence', {
-        'question': question,
-      });
+  }) async {
+    final trimmed = question.trim();
+    if (trimmed.isEmpty) {
+      throw ArgumentError.value(question, 'question', 'must not be blank');
+    }
+    return _api.post(
+      '/v1/doctor/patients/${Uri.encodeComponent(subjectId)}/evidence',
+      {'question': trimmed},
+      timeout: Env.inferenceTimeout,
+    );
+  }
 
   Future<EvidenceResult> askEvidence(String question) async {
     final trimmed = question.trim();
@@ -218,10 +212,6 @@ class CentralBackendGateway {
 
   void dispose() => _api.close();
 }
-
-// ─────────────────────────────────────────────────────────────────────────────
-// TC-WPN — warm-up only
-// ─────────────────────────────────────────────────────────────────────────────
 
 class TcwpnWarmupGateway {
   final ApiClient _api;

@@ -9,6 +9,7 @@ on:
       - integration/clinanx-p4-attention-events
       - integration/clinanx-p5a-signals-data-quality
       - integration/clinanx-p5b-timeline-clinical-notes
+      - integration/clinanx-p5c-evidence-clinician-assessment
   pull_request:
     branches:
       - main
@@ -42,6 +43,8 @@ jobs:
           test/patient_overview_controller_test.dart
           test/timeline_controller_test.dart
           test/clinical_notes_controller_test.dart
+          test/supporting_evidence_controller_test.dart
+          test/clinician_assessment_controller_test.dart
           test/attention_events_controller_test.dart
           test/attention_event_detail_controller_test.dart
           test/features/attention_events/activity_screen_test.dart
@@ -61,6 +64,8 @@ jobs:
           lib/state/patient_overview_controller.dart
           lib/state/timeline_controller.dart
           lib/state/clinical_notes_controller.dart
+          lib/state/supporting_evidence_controller.dart
+          lib/state/clinician_assessment_controller.dart
           lib/state/attention_events_controller.dart
           lib/state/attention_event_detail_controller.dart
           lib/state/controllers.dart
@@ -87,6 +92,8 @@ jobs:
           test/patient_overview_controller_test.dart
           test/timeline_controller_test.dart
           test/clinical_notes_controller_test.dart
+          test/supporting_evidence_controller_test.dart
+          test/clinician_assessment_controller_test.dart
           test/attention_events_controller_test.dart
           test/attention_event_detail_controller_test.dart
           test/features/attention_events/activity_screen_test.dart
