@@ -8,6 +8,7 @@ on:
       - integration/clinanx-p3-patient-overview
       - integration/clinanx-p4-attention-events
       - integration/clinanx-p5a-signals-data-quality
+      - integration/clinanx-p5b-timeline-clinical-notes
   pull_request:
     branches:
       - main
