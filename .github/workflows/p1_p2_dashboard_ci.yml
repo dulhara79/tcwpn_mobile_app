@@ -42,6 +42,7 @@ jobs:
           test/p5b_timeline_clinical_notes_authority_test.dart
           test/p6_notification_authority_test.dart
           test/p7_clinician_storage_scope_test.dart
+          test/p7_authenticated_roster_lifecycle_test.dart
           test/attention_notification_controller_test.dart
           test/attention_notification_store_test.dart
           test/composite_dashboard_repository_test.dart
