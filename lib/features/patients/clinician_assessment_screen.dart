@@ -162,6 +162,7 @@ class _AssessmentForm extends StatelessWidget {
   Widget build(BuildContext context) {
     final noFusion = controller.assessment.fusionResultId == null;
     final noClinician = controller.clinicianId.trim().isEmpty;
+    final controlsDisabled = controller.submitting || noFusion || noClinician;
 
     return Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
@@ -206,19 +207,29 @@ class _AssessmentForm extends StatelessWidget {
                 style: TextStyle(fontSize: 12.5, color: Ds.inkMuted),
               ),
               const SizedBox(height: Ds.s2),
-              for (final tier in const ['Low', 'Medium', 'High'])
-                RadioListTile<String>(
-                  contentPadding: EdgeInsets.zero,
-                  dense: true,
-                  title: Text(tier),
-                  value: tier,
-                  groupValue: controller.selectedTier,
-                  onChanged: controller.submitting || noFusion || noClinician
-                      ? null
-                      : (value) {
-                          if (value != null) controller.selectTier(value);
-                        },
+              RadioGroup<String>(
+                groupValue: controller.selectedTier,
+                onChanged: (value) {
+                  if (!controlsDisabled && value != null) {
+                    controller.selectTier(value);
+                  }
+                },
+                child: Column(
+                  children: [
+                    for (final tier in const ['Low', 'Medium', 'High'])
+                      Material(
+                        type: MaterialType.transparency,
+                        child: RadioListTile<String>(
+                          contentPadding: EdgeInsets.zero,
+                          dense: true,
+                          title: Text(tier),
+                          value: tier,
+                          enabled: !controlsDisabled,
+                        ),
+                      ),
+                  ],
                 ),
+              ),
               const SizedBox(height: Ds.s2),
               TextField(
                 controller: noteController,
