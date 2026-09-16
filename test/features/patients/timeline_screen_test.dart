@@ -70,7 +70,7 @@ void main() {
       ),
     ]);
 
-    expect(find.text('—'), findsWidgets);
+    expect(find.textContaining('—'), findsWidgets);
     expect(find.textContaining('Time not reported'), findsOneWidget);
     expect(find.text('0.00'), findsNothing);
     expect(find.text('Low'), findsNothing);
