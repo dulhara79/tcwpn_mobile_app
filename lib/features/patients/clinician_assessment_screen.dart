@@ -244,7 +244,7 @@ class _AssessmentForm extends StatelessWidget {
                 const SizedBox(height: Ds.s2),
                 Text(
                   controller.error!,
-                  style: const TextStyle(color: Ds.danger),
+                  style: const TextStyle(color: Ds.red),
                 ),
               ],
               const SizedBox(height: Ds.s3),
