@@ -108,25 +108,29 @@ class _AppShellState extends State<AppShell> with WidgetsBindingObserver {
   }
 
   Future<void> _enableNotifications() async {
+    // Permission controls whether the OS may present a local notification. It
+    // must not control whether ClinAnx continues checking the server-owned
+    // AttentionEvent inbox. Polling is the independent recovery path required
+    // by the handbook when push/permission/provider delivery is unavailable.
     try {
       final enabled = await _notificationGateway.requestPermission();
-      if (!mounted) return;
-      _notificationsEnabled = enabled;
-      if (enabled) {
-        try {
-          await _pushService.activateAuthenticatedSession();
-        } catch (_) {
-          // Push is an acceleration path. Polling remains the recovery path.
-        }
-        _startNotificationPolling();
-      }
+      if (mounted) _notificationsEnabled = enabled;
     } catch (_) {
-      // Activity remains available as the persistent server-backed event inbox.
+      _notificationsEnabled = false;
     }
+
+    try {
+      await _pushService.activateAuthenticatedSession();
+    } catch (_) {
+      // Push is an acceleration path. Persistent server events + polling remain
+      // available when Firebase, token registration or permission setup fails.
+    }
+
+    if (!mounted) return;
+    _startNotificationPolling();
   }
 
   void _startNotificationPolling() {
-    if (!_notificationsEnabled) return;
     _notificationPollTimer?.cancel();
     unawaited(_notificationController.pollOnce());
     _notificationPollTimer = Timer.periodic(
