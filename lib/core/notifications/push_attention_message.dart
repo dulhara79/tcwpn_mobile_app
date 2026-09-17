@@ -2,27 +2,14 @@ class PushAttentionMessage {
   const PushAttentionMessage({required this.type, required this.eventId});
 
   static const String attentionEventType = 'attention_event';
-
-  static const Set<String> _forbiddenKeys = <String>{
-    'patient_name',
-    'patientname',
-    'mrn',
-    'patient_mrn',
-    'patientmrn',
-    'note_text',
-    'current_score',
-    'forecast_score',
-    'fusion_score',
-    'composite_score',
-    'model_output',
-  };
+  static const Set<String> _allowedKeys = <String>{'type', 'event_id'};
 
   final String type;
   final String eventId;
 
   static PushAttentionMessage? tryParse(Map<String, dynamic> data) {
     final normalizedKeys = data.keys.map((key) => key.toLowerCase()).toSet();
-    if (normalizedKeys.any(_forbiddenKeys.contains)) return null;
+    if (normalizedKeys.any((key) => !_allowedKeys.contains(key))) return null;
 
     final type = data['type']?.toString().trim() ?? '';
     final eventId = data['event_id']?.toString().trim() ?? '';
