@@ -51,7 +51,7 @@ Real Primary/Secondary project IDs and credentials must not be fabricated or com
 
 The current Android project still uses:
 
-- application ID `com.example.r26_ds012_app`;
+- application ID `lk.sliit.r26ds012.clinanx`;
 - debug signing for the `release` build type.
 
 Therefore a generated release-mode APK is a research/development artifact, not a production-signed distribution package.
