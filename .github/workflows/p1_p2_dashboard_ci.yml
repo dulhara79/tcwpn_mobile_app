@@ -48,6 +48,11 @@ jobs:
           test/p7_release_config_test.dart
           test/p7_settings_truthfulness_test.dart
           test/p7_hardening_authority_test.dart
+          test/p7_push_payload_test.dart
+          test/device_token_registration_coordinator_test.dart
+          test/p7_push_notification_dedupe_test.dart
+          test/p7_push_realtime_authority_test.dart
+          test/session_sign_out_test.dart
           test/attention_notification_controller_test.dart
           test/attention_notification_store_test.dart
           test/composite_dashboard_repository_test.dart
@@ -109,7 +114,19 @@ jobs:
             lib/core/notifications \
             lib/data/local/attention_notification_store.dart \
             lib/state/attention_notification_controller.dart 2>/dev/null; then
-            echo 'P6 notification delivery must not manufacture clinical authority.'
+            echo 'Notification delivery must not manufacture clinical authority.'
+            exit 1
+          fi
+          if grep -R -nEi 'patient_name|patientname|patient_mrn|patientmrn|note_text|current_score|forecast_score|fusion_score' \
+            lib/core/notifications/push_attention_message.dart \
+            lib/core/notifications/firebase_attention_push_service.dart \
+            lib/core/notifications/device_token_registration_coordinator.dart \
+            lib/domain/contracts/device_token_registration.dart 2>/dev/null; then
+            echo 'Phase 7 push transport must contain event identity only; PHI/clinical detail is forbidden.'
+            exit 1
+          fi
+          if grep -nE '^\s*(firebase_database|cloud_firestore|firebase_storage|cloud_functions):' pubspec.yaml; then
+            echo 'Phase 7 is FCM-only; Firebase DB/storage/functions products are forbidden.'
             exit 1
           fi
           if grep -nE "static const _kRoster = 'roster_v2'|static const _key = 'server_dashboard_v1'" \

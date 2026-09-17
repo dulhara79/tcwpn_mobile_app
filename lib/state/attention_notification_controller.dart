@@ -27,20 +27,31 @@ class AttentionNotificationController {
       final events = await repository.openEvents();
       for (final event in events) {
         if (event.id.isEmpty || event.status != AttentionEventStatus.open) continue;
-        if (await store.wasDelivered(event.id)) continue;
-
-        try {
-          await gateway.showAttentionEvent(event.id);
-          await store.markDelivered(event.id);
-          lastDeliveryError = null;
-        } catch (error) {
-          lastDeliveryError = error;
-        }
+        await deliverEventId(event.id);
       }
     } on ApiException catch (error) {
       lastApiFailure = error.kind;
     } finally {
       _polling = false;
     }
+  }
+
+  Future<void> deliverEventId(String eventId) async {
+    final id = eventId.trim();
+    if (id.isEmpty || await store.wasDelivered(id)) return;
+
+    try {
+      await gateway.showAttentionEvent(id);
+      await store.markDelivered(id);
+      lastDeliveryError = null;
+    } catch (error) {
+      lastDeliveryError = error;
+    }
+  }
+
+  Future<void> markOpenedEventDelivered(String eventId) async {
+    final id = eventId.trim();
+    if (id.isEmpty) return;
+    await store.markDelivered(id);
   }
 }
