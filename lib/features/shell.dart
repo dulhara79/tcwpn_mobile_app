@@ -56,7 +56,6 @@ class _AppShellState extends State<AppShell> with WidgetsBindingObserver {
   StreamSubscription<String>? _pushForegroundSubscription;
   StreamSubscription<String>? _pushOpenSubscription;
   Timer? _notificationPollTimer;
-  bool _notificationsEnabled = false;
 
   @override
   void initState() {
@@ -113,10 +112,9 @@ class _AppShellState extends State<AppShell> with WidgetsBindingObserver {
     // AttentionEvent inbox. Polling is the independent recovery path required
     // by the handbook when push/permission/provider delivery is unavailable.
     try {
-      final enabled = await _notificationGateway.requestPermission();
-      if (mounted) _notificationsEnabled = enabled;
+      await _notificationGateway.requestPermission();
     } catch (_) {
-      _notificationsEnabled = false;
+      // Permission/setup failure must not disable server-backed polling.
     }
 
     try {
