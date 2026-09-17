@@ -1,11 +1,4 @@
 // lib/features/shell.dart
-//
-// ONE shell. The server-backed Dashboard is the primary clinician worklist.
-// Current assessment, forecast, assignments and attention-event identity come
-// from the Central Backend; this shell never recalculates patient risk.
-//
-// Local clinical caches are also owned here, after authentication, so signing
-// out disposes the provider tree before another clinician can enter the app.
 
 import 'dart:async';
 
@@ -13,6 +6,8 @@ import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 
 import '../core/notifications/attention_notification_gateway.dart';
+import '../core/notifications/attention_push_service.dart';
+import '../core/notifications/firebase_attention_push_service.dart';
 import '../core/notifications/flutter_attention_notification_gateway.dart';
 import '../data/api/session.dart';
 import '../data/local/attention_notification_store.dart';
@@ -32,6 +27,7 @@ class AppShell extends StatefulWidget {
   final AttentionNotificationController? attentionNotificationController;
   final AttentionNotificationGateway? notificationGateway;
   final AttentionNotificationStore? notificationStore;
+  final AttentionPushService? pushService;
 
   const AppShell({
     super.key,
@@ -39,6 +35,7 @@ class AppShell extends StatefulWidget {
     this.attentionNotificationController,
     this.notificationGateway,
     this.notificationStore,
+    this.pushService,
   });
 
   @override
@@ -54,7 +51,10 @@ class _AppShellState extends State<AppShell> with WidgetsBindingObserver {
   late final AttentionNotificationGateway _notificationGateway;
   late final AttentionNotificationStore _notificationStore;
   late final AttentionNotificationController _notificationController;
+  late final AttentionPushService _pushService;
   StreamSubscription<String>? _notificationOpenSubscription;
+  StreamSubscription<String>? _pushForegroundSubscription;
+  StreamSubscription<String>? _pushOpenSubscription;
   Timer? _notificationPollTimer;
   bool _notificationsEnabled = false;
 
@@ -82,10 +82,18 @@ class _AppShellState extends State<AppShell> with WidgetsBindingObserver {
           store: _notificationStore,
           gateway: _notificationGateway,
         );
+    _pushService = widget.pushService ?? attentionPushService;
 
     _notificationOpenSubscription =
         _notificationGateway.openedEventIds.listen((eventId) {
       unawaited(_openNotificationEvent(eventId, consumePending: true));
+    });
+
+    _pushForegroundSubscription = _pushService.foregroundEventIds.listen(
+      (eventId) => unawaited(_notificationController.deliverEventId(eventId)),
+    );
+    _pushOpenSubscription = _pushService.openedEventIds.listen((eventId) {
+      unawaited(_openPushEvent(eventId));
     });
 
     if (_ownsDashboardController) {
@@ -94,6 +102,7 @@ class _AppShellState extends State<AppShell> with WidgetsBindingObserver {
 
     WidgetsBinding.instance.addPostFrameCallback((_) {
       unawaited(_restorePendingNotificationOpen());
+      unawaited(_restoreInitialPushOpen());
     });
     unawaited(_enableNotifications());
   }
@@ -103,10 +112,16 @@ class _AppShellState extends State<AppShell> with WidgetsBindingObserver {
       final enabled = await _notificationGateway.requestPermission();
       if (!mounted) return;
       _notificationsEnabled = enabled;
-      if (enabled) _startNotificationPolling();
+      if (enabled) {
+        try {
+          await _pushService.activateAuthenticatedSession();
+        } catch (_) {
+          // Push is an acceleration path. Polling remains the recovery path.
+        }
+        _startNotificationPolling();
+      }
     } catch (_) {
       // Activity remains available as the persistent server-backed event inbox.
-      // Notification permission/plugin failure must never alter clinical state.
     }
   }
 
@@ -140,6 +155,20 @@ class _AppShellState extends State<AppShell> with WidgetsBindingObserver {
     await _openNotificationEvent(eventId, consumePending: false);
   }
 
+  Future<void> _restoreInitialPushOpen() async {
+    final eventId = await _pushService.takeInitialOpenedEventId();
+    if (eventId == null || !mounted) return;
+    await _openPushEvent(eventId);
+  }
+
+  Future<void> _openPushEvent(String eventId) async {
+    final id = eventId.trim();
+    if (id.isEmpty || !mounted) return;
+    await _notificationController.markOpenedEventDelivered(id);
+    if (!mounted) return;
+    await _openNotificationEvent(id, consumePending: false);
+  }
+
   Future<void> _openNotificationEvent(
     String eventId, {
     required bool consumePending,
@@ -163,9 +192,13 @@ class _AppShellState extends State<AppShell> with WidgetsBindingObserver {
   void dispose() {
     WidgetsBinding.instance.removeObserver(this);
     _stopNotificationPolling();
-    final subscription = _notificationOpenSubscription;
-    if (subscription != null) {
-      unawaited(subscription.cancel());
+    final subscriptions = <StreamSubscription<String>?>[
+      _notificationOpenSubscription,
+      _pushForegroundSubscription,
+      _pushOpenSubscription,
+    ];
+    for (final subscription in subscriptions) {
+      if (subscription != null) unawaited(subscription.cancel());
     }
     if (_ownsDashboardController) {
       _dashboardController.dispose();
