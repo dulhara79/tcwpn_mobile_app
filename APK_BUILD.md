@@ -42,19 +42,19 @@ Never commit:
 
 ## 3. Required/supported build defines
 
-| Define | Research/study build | Purpose |
-|---|---:|---|
-| `BACKEND_BASE` | required | Central Backend URL; HTTPS for remote hosts |
-| `AUTH_BASE` | required for real participant use | clinician authentication service |
-| `APP_VERSION` | required | version shown in research build identity |
-| `BUILD_ENVIRONMENT` | required | e.g. `study`, `staging`, `study-dr` |
-| `BUILD_REVISION` | required | exact Git revision used for the artifact |
-| `DEMO_DATA` | must be `false` | prevents synthetic fixtures in participant builds |
-| `TCWPN_BASE` | optional | unauthenticated `/health` warm-up only |
-| `PUSH_FIREBASE_SLOT` | optional, default `primary` | selects Primary or Secondary Firebase build slot |
-| `FIREBASE_PRIMARY_*` | required for Primary push build | Firebase client routing configuration |
-| `FIREBASE_SECONDARY_*` | required for Secondary DR build | Firebase client routing configuration |
-| `AUTH_SALT`, `AUTH_LOCAL` | demo/dev only | synthetic local authentication |
+| Define                    |              Research/study build | Purpose                                           |
+| ------------------------- | --------------------------------: | ------------------------------------------------- |
+| `BACKEND_BASE`            |                          required | Central Backend URL; HTTPS for remote hosts       |
+| `AUTH_BASE`               | required for real participant use | clinician authentication service                  |
+| `APP_VERSION`             |                          required | version shown in research build identity          |
+| `BUILD_ENVIRONMENT`       |                          required | e.g. `study`, `staging`, `study-dr`               |
+| `BUILD_REVISION`          |                          required | exact Git revision used for the artifact          |
+| `DEMO_DATA`               |                   must be `false` | prevents synthetic fixtures in participant builds |
+| `TCWPN_BASE`              |                          optional | unauthenticated `/health` warm-up only            |
+| `PUSH_FIREBASE_SLOT`      |       optional, default `primary` | selects Primary or Secondary Firebase build slot  |
+| `FIREBASE_PRIMARY_*`      |   required for Primary push build | Firebase client routing configuration             |
+| `FIREBASE_SECONDARY_*`    |   required for Secondary DR build | Firebase client routing configuration             |
+| `AUTH_SALT`, `AUTH_LOCAL` |                     demo/dev only | synthetic local authentication                    |
 
 ## 4. Primary research APK
 
@@ -168,7 +168,7 @@ sha256sum build/app/outputs/flutter-apk/app-release.apk
 
 ## 9. Important Android packaging limitation
 
-The current repository still uses the example Android application ID `com.example.r26_ds012_app` and the `release` build type is currently wired to the debug signing configuration. Therefore a generated `--release` APK must be treated as a **research/development artifact, not a production-signed distribution artifact**.
+The current repository still uses the example Android application ID `lk.sliit.r26ds012.clinanx` and the `release` build type is currently wired to the debug signing configuration. Therefore a generated `--release` APK must be treated as a **research/development artifact, not a production-signed distribution artifact**.
 
 Before external study distribution, the team must configure an approved unique application ID and a protected release keystore/signing process. Do not commit the keystore or its passwords.
 
