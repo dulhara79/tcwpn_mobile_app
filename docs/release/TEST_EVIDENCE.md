@@ -29,7 +29,7 @@ Phase 9 documentation acceptance test was introduced first at commit:
 
 PR workflow run:
 
-- ClinAnx integration and hardening checks — run `35236252072`
+- ClinAnx integration and hardening checks — run `35236252072` — expected failure
 
 Expected RED result:
 
@@ -47,15 +47,26 @@ This demonstrates that the new Phase 9 test could detect the documentation drift
 
 ## 3. Phase 9 GREEN evidence
 
-The final Phase 9 GREEN workflow IDs and head commit must be recorded here **after** the implementation run completes successfully. Do not infer or pre-fill success.
+The Phase 9 release-documentation implementation commit was:
 
-Required evidence:
+`78596e3abde56dc4e8aa1a391c9790d09b1f4ae5`
 
-- Phase 9 PR head commit
-- ClinAnx integration and hardening workflow run ID/result
-- P0 contract workflow run ID/result
-- full test count/result
-- full analysis result
+Recorded PR workflow evidence for that commit:
+
+- ClinAnx integration and hardening checks — run `35237214844` — **success**
+- ClinAnx P0 contract verification — run `35237214921` — **success**
+
+The integration/hardening workflow recorded:
+
+- focused suite: **301 tests passed**;
+- focused `flutter analyze`: **No issues found**;
+- authority/privacy/forbidden-pattern checks: **success**;
+- full regression suite: **332 tests passed**;
+- full `flutter analyze`: **No issues found**.
+
+The four Phase 9 release-documentation tests passed in both the focused and full suites. They verify that the release-documentation set exists, the README links to the release evidence/runbook, active release docs do not reintroduce the obsolete shared mobile backend credential, and the public research-use boundary is explicit.
+
+A later documentation-only evidence update may produce a newer PR head commit/run. The run IDs above remain the recorded GREEN evidence for the Phase 9 implementation commit; final merge readiness must still be checked against the latest PR head before merge.
 
 ## 4. Dependency/toolchain evidence
 
