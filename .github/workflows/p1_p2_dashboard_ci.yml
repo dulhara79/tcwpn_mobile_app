@@ -52,6 +52,7 @@ jobs:
           test/device_token_registration_coordinator_test.dart
           test/p7_push_notification_dedupe_test.dart
           test/p7_push_realtime_authority_test.dart
+          test/p8_handbook_hardening_test.dart
           test/session_sign_out_test.dart
           test/attention_notification_controller_test.dart
           test/attention_notification_store_test.dart
@@ -77,6 +78,10 @@ jobs:
         run: |
           if find lib -type f -name '*.dart' -print0 | xargs -0 grep -nE '/v1/subjects/attach|_raiseIfEscalated|KpiDashboardScreen|ClinicalDashboardStats'; then
             echo 'Forbidden retired authority/compatibility path found in active Dart.'
+            exit 1
+          fi
+          if grep -R -nE 'BACKEND_TOKEN|Env\.backendToken' lib --include='*.dart' 2>/dev/null; then
+            echo 'Handbook Phase 8 forbids reusable privileged backend credentials in the mobile app.'
             exit 1
           fi
           if grep -R -nE 'AlertBandX\.fromScore' lib/features/dashboard lib/features/patients/patient_overview_screen.dart lib/features/attention_events --include='*.dart' 2>/dev/null; then
@@ -122,11 +127,11 @@ jobs:
             lib/core/notifications/firebase_attention_push_service.dart \
             lib/core/notifications/device_token_registration_coordinator.dart \
             lib/domain/contracts/device_token_registration.dart 2>/dev/null; then
-            echo 'Phase 7 push transport must contain event identity only; PHI/clinical detail is forbidden.'
+            echo 'Push transport must contain event identity only; PHI/clinical detail is forbidden.'
             exit 1
           fi
           if grep -nE '^\s*(firebase_database|cloud_firestore|firebase_storage|cloud_functions):' pubspec.yaml; then
-            echo 'Phase 7 is FCM-only; Firebase DB/storage/functions products are forbidden.'
+            echo 'Push is FCM-only; Firebase DB/storage/functions products are forbidden.'
             exit 1
           fi
           if grep -nE "static const _kRoster = 'roster_v2'|static const _key = 'server_dashboard_v1'" \
