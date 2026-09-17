@@ -20,8 +20,6 @@ class FirebaseAttentionPushService implements AttentionPushService {
 
   FirebaseMessaging? _messaging;
   DeviceTokenRegistrationCoordinator? _coordinator;
-  StreamSubscription<RemoteMessage>? _foregroundSub;
-  StreamSubscription<RemoteMessage>? _openedSub;
   StreamSubscription<String>? _refreshSub;
   String? _initialOpenedEventId;
   bool _initialized = false;
@@ -46,14 +44,14 @@ class FirebaseAttentionPushService implements AttentionPushService {
       platform: PushFirebaseConfig.platformName,
     );
 
-    _foregroundSub = FirebaseMessaging.onMessage.listen((message) {
+    FirebaseMessaging.onMessage.listen((message) {
       final parsed = PushAttentionMessage.tryParse(message.data);
       if (parsed != null && !_foreground.isClosed) {
         _foreground.add(parsed.eventId);
       }
     });
 
-    _openedSub = FirebaseMessaging.onMessageOpenedApp.listen((message) {
+    FirebaseMessaging.onMessageOpenedApp.listen((message) {
       final parsed = PushAttentionMessage.tryParse(message.data);
       if (parsed != null && !_opened.isClosed) {
         _opened.add(parsed.eventId);
