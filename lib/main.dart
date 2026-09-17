@@ -5,6 +5,7 @@ import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 
+import 'core/config/env.dart';
 import 'core/design/theme.dart';
 import 'core/notifications/firebase_attention_push_service.dart';
 import 'core/notifications/flutter_attention_notification_gateway.dart';
@@ -16,8 +17,6 @@ import 'data/local/stores.dart';
 import 'features/auth/login_screen.dart';
 import 'features/consent/consent_gate_screen.dart';
 import 'features/shell.dart';
-
-const String kAppVersion = '1.0.0+1';
 
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
@@ -84,7 +83,7 @@ class _ClinAnxAppState extends State<ClinAnxApp> {
       builder: (context, child) => ColoredBox(color: Ds.canvas, child: child!),
       home: !_consented
           ? ConsentGateScreen(
-              appVersion: kAppVersion,
+              appVersion: Env.appVersion,
               onAccepted: () => setState(() => _consented = true),
             )
           : (widget.signedIn ? const AppShell() : const LoginScreen()),
