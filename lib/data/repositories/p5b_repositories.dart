@@ -11,11 +11,7 @@ class CentralBackendTimelineRepository implements TimelineRepository {
   final ApiClient _api;
 
   CentralBackendTimelineRepository([ApiClient? api])
-      : _api = api ??
-            ApiClient(
-              Env.backendBase,
-              bearer: () => Env.backendToken,
-            );
+      : _api = api ?? ApiClient(Env.backendBase);
 
   @override
   Future<List<TimelineEntry>> history(
