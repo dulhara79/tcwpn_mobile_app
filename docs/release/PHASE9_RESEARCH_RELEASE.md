@@ -58,11 +58,13 @@ Do not pre-fill backend/service/model versions from memory. Record the versions 
 
 ### Source and configuration
 
+These stay open until the actual release artifact is selected and built.
+
 - [ ] Final release commit/tag selected.
 - [ ] `BUILD_REVISION` equals that exact commit.
 - [ ] `git status --short` is clean before build.
 - [ ] `pubspec.lock` is committed and unchanged during artifact build.
-- [ ] `APP_VERSION` matches `pubspec.yaml`.
+- [ ] `APP_VERSION` matches `pubspec.yaml` for the artifact.
 - [ ] Correct `BUILD_ENVIRONMENT` recorded.
 - [ ] Correct HTTPS backend/auth endpoints selected.
 - [ ] `DEMO_DATA=false` for participant/research build.
@@ -70,15 +72,24 @@ Do not pre-fill backend/service/model versions from memory. Record the versions 
 
 ### Automated verification
 
-- [ ] Phase 9 PR focused tests green.
-- [ ] Authority/privacy guards green.
-- [ ] Full `flutter test` green.
-- [ ] Full `flutter analyze` green.
-- [ ] P0 contract workflow green.
+The Phase 9 mobile engineering gate has been executed on the PR. Recorded evidence is in `TEST_EVIDENCE.md`.
 
-Exact automated evidence belongs in `TEST_EVIDENCE.md` and GitHub Actions.
+- [x] Phase 9 PR focused tests green.
+- [x] Authority/privacy guards green.
+- [x] Full `flutter test` green.
+- [x] Full `flutter analyze` green.
+- [x] P0 contract workflow green.
+
+Latest verified documentation/evidence head before this checklist update: `ccaaf44053e92e42a46b74f325efbf4925c31910`.
+
+- integration and hardening checks — run `35238965194` — success
+- P0 contract verification — run `35238965209` — success
+
+Any later commit must receive its own successful PR workflows before merge.
 
 ### Manual mobile verification
+
+These remain intentionally unchecked until a human performs them.
 
 - [ ] Phase 8 usability/hardening checklist executed by a human.
 - [ ] Primary build installed and smoke-tested on a physical/emulated device as applicable.
