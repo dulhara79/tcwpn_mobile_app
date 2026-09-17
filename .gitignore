@@ -89,3 +89,5 @@ app.*.map.json
 BUILD.md
 .env
 .env.bak
+android/app/google-services-primary.json
+android/app/google-services-secondary.json
