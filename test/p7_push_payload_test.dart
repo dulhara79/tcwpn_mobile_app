@@ -3,13 +3,10 @@ import 'package:r26_ds012_app/core/notifications/push_attention_message.dart';
 import 'package:r26_ds012_app/domain/contracts/device_token_registration.dart';
 
 void main() {
-  test('accepts only attention_event payload with nonblank event_id', () {
+  test('accepts only minimal attention_event routing payload', () {
     final message = PushAttentionMessage.tryParse({
       'type': 'attention_event',
       'event_id': ' evt-123 ',
-      'severity': 'high',
-      'patient_name': 'must-not-be-used',
-      'mrn': 'must-not-be-used',
     });
 
     expect(message, isNotNull);
@@ -18,9 +15,42 @@ void main() {
   });
 
   test('rejects unrelated, blank and malformed payloads', () {
-    expect(PushAttentionMessage.tryParse({'type': 'chat', 'event_id': 'evt-1'}), isNull);
-    expect(PushAttentionMessage.tryParse({'type': 'attention_event', 'event_id': '  '}), isNull);
-    expect(PushAttentionMessage.tryParse({'type': 'attention_event'}), isNull);
+    expect(
+      PushAttentionMessage.tryParse({'type': 'chat', 'event_id': 'evt-1'}),
+      isNull,
+    );
+    expect(
+      PushAttentionMessage.tryParse(
+          {'type': 'attention_event', 'event_id': '  '}),
+      isNull,
+    );
+    expect(
+      PushAttentionMessage.tryParse({'type': 'attention_event'}),
+      isNull,
+    );
+  });
+
+  test('rejects PHI or clinical detail in push payload', () {
+    for (final key in <String>[
+      'patient_name',
+      'mrn',
+      'note_text',
+      'current_score',
+      'forecast_score',
+      'fusion_score',
+      'composite_score',
+      'model_output',
+    ]) {
+      expect(
+        PushAttentionMessage.tryParse({
+          'type': 'attention_event',
+          'event_id': 'evt-123',
+          key: 'forbidden',
+        }),
+        isNull,
+        reason: 'Push transport must reject $key.',
+      );
+    }
   });
 
   test('device token registration serializes routing metadata only', () {

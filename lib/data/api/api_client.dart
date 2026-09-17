@@ -1,14 +1,4 @@
 // lib/data/api/api_client.dart
-//
-// One HTTP client for every service. Replaces the three divergent clients in the
-// previous build (one that decoded before checking status, one that swallowed
-// every error into a print, one with no auth header at all).
-//
-// Guarantees:
-//   • status is checked before the body is decoded
-//   • non-JSON error bodies produce a readable message, not a FormatException
-//   • every request carries auth when a token is configured
-//   • cold-start retries are bounded and only applied to idempotent reads
 
 import 'dart:async';
 import 'dart:convert';
@@ -16,9 +6,9 @@ import 'dart:io';
 
 import 'package:http/http.dart' as http;
 
-import '../../core/security/secure_http.dart';
-
 import '../../core/config/env.dart';
+import '../../core/security/clinical_endpoint_policy.dart';
+import '../../core/security/secure_http.dart';
 import 'session.dart';
 
 enum ApiFailure {
@@ -31,15 +21,7 @@ enum ApiFailure {
   validation,
   server,
   malformed,
-
-  /// No base URL was compiled into this build. Distinct from [notFound]: the
-  /// service was never addressed, so nothing was reached and nothing 404'd.
-  /// Reporting this as "endpoint not found" sends the clinician to a Settings
-  /// screen that cannot fix it — the fix is a rebuild with --dart-define.
   notConfigured,
-
-  /// The server's certificate was not signed by a pinned authority.
-  /// Almost always an intercepting proxy, occasionally a rotated CA.
   insecureConnection,
   unknown,
 }
@@ -57,43 +39,33 @@ class ApiException implements Exception {
     this.endpoint = '',
   });
 
-  /// Written for a clinician, not a developer: what happened and what to do.
   String get message => switch (kind) {
         ApiFailure.offline =>
           'No network connection. The note is saved on this device and can be analysed once you are back online.',
         ApiFailure.timeout =>
-          'The model did not respond in time. This usually means the service is starting up — try again in a moment.',
+          'The service did not respond in time. Try again in a moment.',
         ApiFailure.unauthorized =>
-          'Your session has expired. Sign out and sign in again. If that does '
-              'not help, contact the study team.',
+          'Your session has expired. Sign out and sign in again. If that does not help, contact the study team.',
         ApiFailure.forbidden =>
           'You are signed in, but you do not have permission to access this patient or action.',
         ApiFailure.notFound =>
-          'The clinical service could not be reached at the address this app was '
-              'built with. Nothing you entered has been lost. Please report this '
-              'to the study team (routing error).',
+          'The clinical service could not be reached at the address this app was built with. Please report this to the study team.',
         ApiFailure.conflict =>
           'This record changed on the server. Refresh to see the current state before trying again.',
         ApiFailure.notConfigured =>
-          'This build has no clinical service configured, so nothing can be '
-              'analysed. Your work is saved on this device. The study team needs '
-              'to reinstall a configured build.',
-        ApiFailure.validation => 'The service rejected this request. $detail',
+          'This build has no clinical service configured. The study team needs to install a configured build.',
+        ApiFailure.validation => detail.isEmpty
+            ? 'The service rejected this request.'
+            : 'The service rejected this request. $detail',
         ApiFailure.server =>
-          'The clinical service reported an internal error. Nothing was saved on '
-              'the server; your note is still safe on this device.',
+          'The clinical service reported an internal error. Your local work has not been replaced by a fabricated result.',
         ApiFailure.malformed =>
           'The service returned a response this app could not read. Report this with the time it happened.',
         ApiFailure.insecureConnection =>
-          'The connection was refused because the server\'s security '
-              'certificate could not be verified. This network may be '
-              'inspecting traffic. Do not submit patient data on it — switch '
-              'to mobile data or another network, and tell the study team.',
+          'The connection was refused because the configured clinical endpoint is not using an approved secure transport or its certificate could not be verified.',
         ApiFailure.unknown => detail.isEmpty ? 'Something went wrong.' : detail,
       };
 
-  /// Pin failures are never retried. Retrying an intercepted connection just
-  /// hands the interceptor more attempts.
   bool get isRetryable =>
       kind == ApiFailure.timeout ||
       kind == ApiFailure.offline ||
@@ -107,28 +79,14 @@ class ApiException implements Exception {
 class ApiClient {
   final String baseUrl;
   final http.Client _http;
-
-  /// Supplies the bearer token for this service, evaluated per request.
-  ///
-  /// Defaults to the clinician session token when signed in, and to no
-  /// Authorization header otherwise. Service-specific clients may override the
-  /// callback when a verified contract requires a different credential.
   final String Function() _bearer;
 
-  /// The client is chosen by base URL: a host in the pin set gets a client
-  /// whose trust store contains only the pinned roots, so an intercepting proxy
-  /// fails the handshake before any note text is written to the socket.
-  ///
-  /// Injecting a client (for tests) bypasses pinning, which is correct — a test
-  /// double is not a network path.
   ApiClient(this.baseUrl, {http.Client? client, String Function()? bearer})
       : _http = client ?? SecureHttp.clientFor(baseUrl),
         _bearer = bearer ?? _defaultBearer;
 
   static String _defaultBearer() => Session.isActive ? Session.token! : '';
 
-  /// Omits Authorization entirely when there is no credential, rather than
-  /// sending `Bearer ` with an empty value.
   Map<String, String> get _headers {
     final bearer = _bearer();
     return {
@@ -187,6 +145,13 @@ class ApiClient {
         detail: 'No base URL configured for this service.',
       );
     }
+    if (!ClinicalEndpointPolicy.isAllowed(baseUrl)) {
+      throw ApiException(
+        kind: ApiFailure.insecureConnection,
+        endpoint: endpoint,
+        detail: 'Remote clinical endpoints must use HTTPS.',
+      );
+    }
 
     late http.Response res;
     try {
@@ -209,13 +174,18 @@ class ApiClient {
       throw ApiException(kind: ApiFailure.offline, endpoint: endpoint);
     } on http.ClientException catch (e) {
       throw ApiException(
-          kind: ApiFailure.offline, endpoint: endpoint, detail: e.message);
+        kind: ApiFailure.offline,
+        endpoint: endpoint,
+        detail: e.message,
+      );
     } catch (e) {
       throw ApiException(
-          kind: ApiFailure.unknown, endpoint: endpoint, detail: e.toString());
+        kind: ApiFailure.unknown,
+        endpoint: endpoint,
+        detail: 'Unexpected client error.',
+      );
     }
 
-    // Status first, body second. Always.
     if (res.statusCode >= 400) {
       throw ApiException(
         kind: switch (res.statusCode) {
@@ -229,7 +199,7 @@ class ApiClient {
         },
         statusCode: res.statusCode,
         endpoint: endpoint,
-        detail: _extractDetail(res.body),
+        detail: _extractSafeDetail(res.body),
       );
     }
 
@@ -242,22 +212,29 @@ class ApiClient {
         kind: ApiFailure.malformed,
         statusCode: res.statusCode,
         endpoint: endpoint,
-        detail: res.body.substring(0, res.body.length.clamp(0, 200)),
+        detail: 'Response body was not valid JSON.',
       );
     }
   }
 
-  /// FastAPI puts errors under `detail`; some Spaces use `error`. Fall back to
-  /// a truncated raw body rather than showing the user a stack trace.
-  String _extractDetail(String body) {
+  String _extractSafeDetail(String body) {
     try {
-      final j = jsonDecode(body);
-      if (j is Map) {
-        final d = j['detail'] ?? j['error'] ?? j['message'];
-        if (d != null) return d.toString();
+      final decoded = jsonDecode(body);
+      if (decoded is Map) {
+        final value = decoded['detail'] ?? decoded['error'] ?? decoded['message'];
+        if (value is String) {
+          final text = value.trim();
+          final lower = text.toLowerCase();
+          if (text.length <= 300 &&
+              !text.contains('\n') &&
+              !lower.contains('traceback') &&
+              !lower.contains('stack trace')) {
+            return text;
+          }
+        }
       }
     } catch (_) {}
-    return body.substring(0, body.length.clamp(0, 200));
+    return '';
   }
 
   void close() => _http.close();

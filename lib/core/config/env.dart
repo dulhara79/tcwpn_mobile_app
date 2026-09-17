@@ -1,20 +1,39 @@
 // lib/core/config/env.dart
 //
 // Central build-time configuration for ClinAnx. Values come from --dart-define;
-// no reusable credential should ever be committed as a source literal.
+// no reusable privileged credential is compiled into the mobile application.
 
 class Env {
   const Env._();
 
   static const String appName = 'ClinAnx';
 
+  // ── Research build identity ───────────────────────────────────────────────
+  // Non-secret identifiers make a study/demo build reproducible and prevent
+  // accidental endpoint/build confusion. They are safe to display in Settings.
+
+  static const String appVersion = String.fromEnvironment(
+    'APP_VERSION',
+    defaultValue: '1.0.0+1',
+  );
+  static const String buildEnvironment = String.fromEnvironment(
+    'BUILD_ENVIRONMENT',
+    defaultValue: 'development',
+  );
+  static const String buildRevision = String.fromEnvironment(
+    'BUILD_REVISION',
+    defaultValue: 'unversioned',
+  );
+
   // ── Central Backend ────────────────────────────────────────────────────────
+  // Central Backend requests use the authenticated clinician Session bearer.
+  // Service-to-service/shared privileged credentials belong on the backend and
+  // must not be compiled into ClinAnx.
 
   static const String backendBase = String.fromEnvironment(
     'BACKEND_BASE',
     defaultValue: '',
   );
-  static const String backendToken = String.fromEnvironment('BACKEND_TOKEN');
   static const String tcwpnBase = String.fromEnvironment('TCWPN_BASE');
 
   // ── Clinician authentication ──────────────────────────────────────────────
@@ -32,6 +51,8 @@ class Env {
   // not support runtime switching between multiple messaging FirebaseApp
   // instances. The second slot is for a separately built DR APK/app package;
   // runtime resilience remains server persistence + polling fallback.
+
+  static const Set<String> validPushSlots = <String>{'primary', 'secondary'};
 
   static const String pushFirebaseSlot = String.fromEnvironment(
     'PUSH_FIREBASE_SLOT',
@@ -60,8 +81,11 @@ class Env {
   static const String firebaseSecondaryIosBundleId =
       String.fromEnvironment('FIREBASE_SECONDARY_IOS_BUNDLE_ID');
 
-  static bool get useSecondaryFirebase =>
-      pushFirebaseSlot.trim().toLowerCase() == 'secondary';
+  static String get normalizedPushFirebaseSlot =>
+      pushFirebaseSlot.trim().toLowerCase();
+  static bool get hasValidPushFirebaseSlot =>
+      validPushSlots.contains(normalizedPushFirebaseSlot);
+  static bool get useSecondaryFirebase => normalizedPushFirebaseSlot == 'secondary';
 
   static String get activeFirebaseApiKey => useSecondaryFirebase
       ? firebaseSecondaryApiKey
@@ -80,6 +104,7 @@ class Env {
       : firebasePrimaryIosBundleId;
 
   static bool get hasPushFirebase =>
+      hasValidPushFirebaseSlot &&
       activeFirebaseApiKey.isNotEmpty &&
       activeFirebaseAppId.isNotEmpty &&
       activeFirebaseSenderId.isNotEmpty &&
@@ -95,6 +120,18 @@ class Env {
   static bool get hasBackend => backendBase.isNotEmpty;
   static bool get hasTcwpnWarmup => tcwpnBase.isNotEmpty;
   static bool get isConfigured => hasBackend;
+
+  /// Handbook Phase 8 transport rule: participant/clinical traffic uses HTTPS.
+  /// Plain HTTP is tolerated only for loopback development, never remote hosts.
+  static bool get isBackendTransportSafe {
+    if (!hasBackend) return true;
+    final uri = Uri.tryParse(backendBase.trim());
+    if (uri == null || uri.host.isEmpty) return false;
+    if (uri.scheme.toLowerCase() == 'https') return true;
+    if (uri.scheme.toLowerCase() != 'http') return false;
+    final host = uri.host.toLowerCase();
+    return host == 'localhost' || host == '127.0.0.1' || host == '::1';
+  }
 
   static const Duration stalenessThreshold = Duration(hours: 72);
 

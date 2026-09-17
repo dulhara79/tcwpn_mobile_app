@@ -1,32 +1,9 @@
 // lib/data/api/gateways.dart
 //
 // ONE gateway for the clinician workflow: the R26-DS-012 Central Backend.
-//
-// WHAT WAS REMOVED, AND WHY
-// -------------------------
-// `FusionGateway` posted to `/contribute` and read `GET /state/{mrn}`. Those
-// routes exist in NO service in any repository. The fusion service serves
-// /v1/fuse, /v1/fuse/manual, /v1/physio/tick and /v1/patients/{mrn}/state; the
-// Central Backend serves none of them. Every fusion call in the previous build
-// therefore fell through to a local composite computed from a client-side weight
-// table, and was displayed with a "provisional" label that concealed the fact
-// that the framework score had never been fetched at all.
-//
-// `TcwpnGateway.analyse()` posted directly to the Space's /predict. That path is
-// gone from the clinician workflow: the backend owns ingestion (its own
-// modality_clients.py header says so), and it is the backend that applies the
-// gate, the recency and reliability weighting, the harmonisation and the
-// conformal calibration. An app calling /predict directly skips all of it.
-//
-// WHAT REMAINS
-// ------------
-//   CentralBackendGateway  — enrolment, note ingestion, fusion, timeline,
-//                            evidence, verdict.
-//   TcwpnWarmupGateway     — /health only, to wake a sleeping Space.
-//
-// C3Gateway was DELETED. It posted to /v3/risk/classify, the retired
-// intervention route, and nothing under lib/features/ ever called it. Keeping a
-// dead client for a dead endpoint is how stale contracts creep back in.
+// Central Backend calls use ApiClient's default authenticated clinician Session
+// bearer. Reusable privileged backend/service credentials are never compiled
+// into the mobile app.
 
 import '../../core/config/env.dart';
 import '../../domain/models.dart';
@@ -37,11 +14,7 @@ class CentralBackendGateway {
   final ApiClient _api;
 
   CentralBackendGateway([ApiClient? api])
-      : _api = api ??
-            ApiClient(
-              Env.backendBase,
-              bearer: () => Env.backendToken,
-            );
+      : _api = api ?? ApiClient(Env.backendBase);
 
   Future<Map<String, dynamic>?> health() async {
     try {
@@ -56,13 +29,14 @@ class CentralBackendGateway {
     String? enrolledBy,
   }) async {
     final json = await _api.post(
-        '/v1/subjects',
-        {
-          'mrn': mrn,
-          if (enrolledBy != null && enrolledBy.isNotEmpty)
-            'enrolled_by': enrolledBy,
-        },
-        timeout: Env.quickTimeout);
+      '/v1/subjects',
+      {
+        'mrn': mrn,
+        if (enrolledBy != null && enrolledBy.isNotEmpty)
+          'enrolled_by': enrolledBy,
+      },
+      timeout: Env.quickTimeout,
+    );
     return EnrolmentResult.fromJson(json);
   }
 
@@ -100,12 +74,10 @@ class CentralBackendGateway {
     required String externalId,
   }) =>
       _api.post(
-          '/v1/subjects/$subjectId/external-ids',
-          {
-            'modality': modality,
-            'external_id': externalId,
-          },
-          timeout: Env.quickTimeout);
+        '/v1/subjects/$subjectId/external-ids',
+        {'modality': modality, 'external_id': externalId},
+        timeout: Env.quickTimeout,
+      );
 
   Future<ClinicalNoteIngestResult> submitNote({
     required String subjectId,
@@ -128,7 +100,6 @@ class CentralBackendGateway {
       'return_support_contributions': true,
       if (author != null && author.isNotEmpty) 'author': author,
     });
-
     return ClinicalNoteIngestResult.fromJson(
       json,
       fallbackLatency: DateTime.now().difference(started).inMilliseconds,
@@ -136,10 +107,7 @@ class CentralBackendGateway {
   }
 
   Future<void> runFusion(String subjectId, {String trigger = 'manual'}) =>
-      _api.post('/v1/fusion/run', {
-        'subject_id': subjectId,
-        'trigger': trigger,
-      });
+      _api.post('/v1/fusion/run', {'subject_id': subjectId, 'trigger': trigger});
 
   Future<FusionResult?> timeline({
     required String subjectId,
@@ -158,8 +126,6 @@ class CentralBackendGateway {
     }
   }
 
-  /// Raw transport retained for compatibility with older gateway-level tests.
-  /// P5C production code consumes it only through the typed EvidenceRepository.
   Future<Map<String, dynamic>> evidence({
     required String subjectId,
     required String question,
@@ -177,9 +143,7 @@ class CentralBackendGateway {
 
   Future<EvidenceResult> askEvidence(String question) async {
     final trimmed = question.trim();
-    if (trimmed.isEmpty) {
-      return EvidenceResult.failure('Enter a question first.');
-    }
+    if (trimmed.isEmpty) return EvidenceResult.failure('Enter a question first.');
     try {
       final json = await _api.post(
         '/v1/evidence/ask',
@@ -201,14 +165,15 @@ class CentralBackendGateway {
     String? note,
   }) =>
       _api.post(
-          '/v1/verdict',
-          {
-            'fusion_result_id': fusionResultId,
-            'tier_label': tierLabel,
-            if (author != null && author.isNotEmpty) 'author': author,
-            if (note != null && note.isNotEmpty) 'note': note,
-          },
-          timeout: Env.quickTimeout);
+        '/v1/verdict',
+        {
+          'fusion_result_id': fusionResultId,
+          'tier_label': tierLabel,
+          if (author != null && author.isNotEmpty) 'author': author,
+          if (note != null && note.isNotEmpty) 'note': note,
+        },
+        timeout: Env.quickTimeout,
+      );
 
   void dispose() => _api.close();
 }

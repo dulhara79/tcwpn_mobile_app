@@ -8,6 +8,7 @@ import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 
 import '../../core/config/env.dart';
+import '../../core/config/research_build_info.dart';
 import '../../core/design/components.dart';
 import '../../core/design/theme.dart';
 import '../../core/design/tokens.dart';
@@ -92,6 +93,14 @@ class SettingsScreen extends StatelessWidget {
               ],
             ),
           ),
+          if (Env.hasBackend && !Env.isBackendTransportSafe) ...[
+            const SizedBox(height: Ds.s3),
+            const InlineNotice(
+              icon: Icons.gpp_bad_outlined,
+              tone: Ds.red,
+              text: 'This build points clinical traffic at an unapproved transport. Remote participant-data endpoints must use HTTPS.',
+            ),
+          ],
           const SizedBox(height: Ds.s3),
           const InlineNotice(
             icon: Icons.devices_rounded,
@@ -101,6 +110,9 @@ class SettingsScreen extends StatelessWidget {
                 'ClinAnx never contacts them directly. Their values reach this '
                 'app only through backend clinician views keyed by subject_id.',
           ),
+          const SizedBox(height: Ds.s5),
+          const SectionLabel('Research build identity'),
+          const _ResearchBuildPanel(),
           const SizedBox(height: Ds.s5),
           const SectionLabel('Model information'),
           Panel(
@@ -148,13 +160,16 @@ class SettingsScreen extends StatelessWidget {
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
                 _GovRow(Icons.lock_outline_rounded, 'Credentials',
-                    'Stored in the device keychain, encrypted at rest.'),
+                    'Clinician session credentials are stored in the device keychain. Reusable Central Backend/service credentials are not part of the mobile authority path.'),
                 Divider(height: Ds.s5),
                 _GovRow(Icons.folder_outlined, 'Clinical records',
                     'Local caches are isolated by clinician and patient. Signing out prevents another clinician account from reading the previous clinician\'s cache.'),
                 Divider(height: Ds.s5),
                 _GovRow(Icons.cloud_upload_outlined, 'Note text',
                     'Sent to the Central Backend, which orchestrates Clinical NLP / TC-WPN analysis. De-identify before submitting.'),
+                Divider(height: Ds.s5),
+                _GovRow(Icons.notifications_none_rounded, 'Push notifications',
+                    'Push transport carries an AttentionEvent identifier only. Patient details are fetched from the Central Backend after authenticated app open.'),
               ],
             ),
           ),
@@ -205,6 +220,47 @@ class SettingsScreen extends StatelessWidget {
       context,
       MaterialPageRoute(builder: (_) => const LoginScreen()),
       (_) => false,
+    );
+  }
+}
+
+class _ResearchBuildPanel extends StatelessWidget {
+  const _ResearchBuildPanel();
+
+  @override
+  Widget build(BuildContext context) {
+    final values = ResearchBuildInfo.values;
+    return Panel(
+      child: Column(
+        children: values.entries
+            .map(
+              (entry) => Padding(
+                padding: const EdgeInsets.symmetric(vertical: 5),
+                child: Row(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    SizedBox(
+                      width: 135,
+                      child: Text(
+                        entry.key.replaceAll('_', ' '),
+                        style: const TextStyle(
+                          fontSize: 12,
+                          color: Ds.inkMuted,
+                        ),
+                      ),
+                    ),
+                    Expanded(
+                      child: Text(
+                        entry.value,
+                        style: AppTheme.data(size: 11.5),
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            )
+            .toList(growable: false),
+      ),
     );
   }
 }
@@ -331,10 +387,7 @@ class _PinningPanelState extends State<_PinningPanel> {
             child: InlineNotice(
               icon: Icons.gpp_maybe_outlined,
               tone: Ds.amber,
-              text: 'This is a web build. Certificate pinning is a '
-                  'native-only capability, so the browser performs TLS '
-                  'validation instead. Use the Android or iOS build with '
-                  'patient data.',
+              text: 'This is a web build. Certificate pinning is a native-only capability, so the browser performs TLS validation instead. Use the Android or iOS build with patient data.',
             ),
           )
         else if (kPinningDisabled)
@@ -343,9 +396,7 @@ class _PinningPanelState extends State<_PinningPanel> {
             child: InlineNotice(
               icon: Icons.gpp_bad_outlined,
               tone: Ds.red,
-              text: 'Certificate pinning is DISABLED by a build flag. Explicit '
-                  'pinned hosts fall back to platform TLS in this development '
-                  'configuration. Do not use it with patient data.',
+              text: 'Certificate pinning is DISABLED by a build flag. Explicit pinned hosts fall back to platform TLS in this development configuration. Do not use it with patient data.',
             ),
           )
         else if (!configured)
@@ -354,9 +405,7 @@ class _PinningPanelState extends State<_PinningPanel> {
             child: InlineNotice(
               icon: Icons.gpp_maybe_outlined,
               tone: Ds.red,
-              text: 'No certificate pin set is configured. HTTPS hosts use '
-                  'platform TLS validation; generate reviewed pins before '
-                  'claiming that a host is pinned.',
+              text: 'No certificate pin set is configured. HTTPS hosts use platform TLS validation; generate reviewed pins before claiming that a host is pinned.',
             ),
           )
         else if (SecureHttp.needsReview)
@@ -365,8 +414,7 @@ class _PinningPanelState extends State<_PinningPanel> {
             child: InlineNotice(
               icon: Icons.update_outlined,
               tone: Ds.amber,
-              text: 'The configured pin set is past its review date '
-                  '($kPinsReviewBy). Regenerate it before relying on the pins.',
+              text: 'The configured pin set is past its review date ($kPinsReviewBy). Regenerate it before relying on the pins.',
             ),
           ),
         Panel(
@@ -394,10 +442,7 @@ class _PinningPanelState extends State<_PinningPanel> {
               ),
               const SizedBox(height: Ds.s2),
               const Text(
-                'Hosts in the generated pin list use the restricted trust store. '
-                'Other HTTPS hosts, including any Central Backend host not shown '
-                'below, use platform TLS validation. A healthy pinned TC-WPN '
-                'host is not proof that the Central Backend is pinned.',
+                'Hosts in the generated pin list use the restricted trust store. Other HTTPS hosts, including any Central Backend host not shown below, use platform TLS validation. A healthy pinned TC-WPN host is not proof that the Central Backend is pinned.',
                 style:
                     TextStyle(fontSize: 11.5, color: Ds.inkFaint, height: 1.45),
               ),
