@@ -1,9 +1,6 @@
 name: ClinAnx P0 contract verification
 
 on:
-  push:
-    branches:
-      - integration/clinanx-p0-contract-first
   pull_request:
     branches:
       - main

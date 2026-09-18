@@ -1,18 +1,6 @@
 name: ClinAnx integration and hardening checks
 
 on:
-  push:
-    branches:
-      - integration/clinanx-p1-p2-production-wiring-cleanup
-      - fix/clinanx-p1-p2-verification-gate
-      - integration/clinanx-p3-patient-overview
-      - integration/clinanx-p4-attention-events
-      - integration/clinanx-p5a-signals-data-quality
-      - integration/clinanx-p5b-timeline-clinical-notes
-      - integration/clinanx-p5c-evidence-clinician-assessment
-      - integration/clinanx-p6-notifications
-      - integration/clinanx-p6-client-first-contract
-      - integration/clinanx-p7-hardening
   pull_request:
     branches:
       - main
