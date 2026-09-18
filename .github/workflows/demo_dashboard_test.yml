@@ -1,9 +1,6 @@
 name: Demo clinical dashboard verification
 
 on:
-  push:
-    branches:
-      - demo/investor-mobile-ready
   workflow_dispatch:
 
 jobs:
