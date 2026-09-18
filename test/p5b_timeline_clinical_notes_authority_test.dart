@@ -53,7 +53,7 @@ void main() {
 
     expect(patients, contains('subjectId: patient.subjectId'));
     expect(patients, isNot(contains('localRecordId: patient.mrn')));
-    expect(overview, contains("'canonical-local::${_controller.subjectId}'"));
+    expect(overview, contains(r"'canonical-local::${_controller.subjectId}'"));
     expect(overview, contains('localRecordId: localRecordId'));
   });
 }
