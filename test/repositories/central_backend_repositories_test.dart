@@ -26,16 +26,6 @@ const _event = <String, dynamic>{
 };
 
 void main() {
-  ApiClient noNetworkApi() => ApiClient(
-        'https://backend.test',
-        client: MockClient((request) async {
-          throw StateError(
-            'Unverified target adapter attempted network call: ${request.url}',
-          );
-        }),
-        bearer: () => 'clinician-jwt',
-      );
-
   test('openEvents uses frozen Phase 6 target contract and parses server event',
       () async {
     final api = ApiClient(
