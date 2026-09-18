@@ -24,16 +24,15 @@ void main() {
     expect(source, isNot(contains('Future<String?> attach(')));
   });
 
-  test('unverified target routes are not live-wired in production adapters', () {
+  test('Phase 5 production adapters use only verified clinician routes', () {
     final source = File(
       'lib/data/repositories/central_backend_repositories.dart',
     ).readAsStringSync();
 
-    expect(source, isNot(contains("'/v1/me'")));
+    expect(source, contains("'/v1/me'"));
+    expect(source, contains("'/v1/clinicians/me/patients'"));
+    expect(source, contains('/assessment/latest'));
+    expect(source, contains("'/v1/attention-events'"));
     expect(source, isNot(contains("'/v1/clinicians/me/dashboard'")));
-    expect(
-      source,
-      isNot(contains("/assessment/latest'")),
-    );
   });
 }

@@ -81,7 +81,7 @@ class ServerDashboardScreen extends StatelessWidget {
               Text('Dashboard', style: AppTheme.display(size: 26)),
               const SizedBox(height: Ds.s2),
               Text(
-                'Server-backed clinician worklist',
+                'Server-backed clinician worklist · ${snapshot.assignedPatients.length} assigned',
                 style: Theme.of(context).textTheme.bodySmall?.copyWith(
                       color: Ds.inkMuted,
                     ),
