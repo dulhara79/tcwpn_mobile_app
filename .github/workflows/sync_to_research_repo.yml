@@ -1,72 +1,214 @@
-name: Sync to Research Repository
+name: Sync ClinAnx to Research Repository
 
 on:
   push:
     branches:
       - main
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: sync-tcwpn-clinical-app
+  cancel-in-progress: false
+
+env:
+  TARGET_REPO: dulhara79/R26-DS-012
+  TARGET_BRANCH: main
+  TARGET_DIR: apps/tcwpn-clinical-app
+  SYNC_BRANCH: sync/tcwpn-clinical-app
+  BOT_NAME: tcwpn-sync[bot]
+  BOT_EMAIL: tcwpn-sync@users.noreply.github.com
 
 jobs:
   sync:
+    name: Mirror approved clinician app
     runs-on: ubuntu-latest
+    timeout-minutes: 20
     env:
-      FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
+      SYNC_TOKEN: ${{ secrets.SYNC_REPO_TOKEN }}
+
     steps:
-      - name: Checkout Source Repository
-        uses: actions/checkout@v4
-        with:
-          fetch-depth: 0
+      - name: Validate synchronization token
+        shell: bash
+        run: |
+          set -euo pipefail
+          if [[ -z "${SYNC_TOKEN:-}" ]]; then
+            echo "::error::SYNC_REPO_TOKEN is not configured."
+            echo "Use a fine-grained token scoped to dulhara79/R26-DS-012 with Contents and Pull requests read/write access."
+            exit 1
+          fi
 
-      - name: Checkout Target Repository
-        uses: actions/checkout@v4
+      - name: Checkout approved source main
+        uses: actions/checkout@v6
         with:
-          repository: dulhara79/R26-DS-012
+          path: source
+          fetch-depth: 1
+          persist-credentials: false
+
+      - name: Checkout research repository main
+        uses: actions/checkout@v6
+        with:
+          repository: ${{ env.TARGET_REPO }}
+          ref: ${{ env.TARGET_BRANCH }}
           token: ${{ secrets.SYNC_REPO_TOKEN }}
-          path: target-repo
+          path: target
           fetch-depth: 0
+          persist-credentials: true
 
-      - name: Sync Files
+      - name: Protect bot-owned sync branch from human work
+        id: preflight
+        working-directory: target
+        shell: bash
         run: |
-          # Define target folder
-          TARGET_DIR="target-repo/apps/tcwpn-clinical-app"
-          
-          # Create folder if it doesn't exist
-          mkdir -p "$TARGET_DIR"
-          
-          # Sync files excluding git metadata and GitHub workflows of the source
-          # Using rsync for efficient mirroring
-          rsync -av --delete \
-            --exclude '.git/' \
-            --exclude '.github/' \
-            --exclude 'target-repo/' \
-            ./ "$TARGET_DIR/"
+          set -euo pipefail
 
-      - name: Create Pull Request in Target Repository
-        working-directory: target-repo
-        env:
-          GITHUB_TOKEN: ${{ secrets.SYNC_REPO_TOKEN }}
-        run: |
-          # Configure Git
-          git config user.name "github-actions[bot]"
-          git config user.email "github-actions[bot]@users.noreply.github.com"
-          
-          # Create a unique branch name
-          BRANCH_NAME="sync/tcwpn-app-$(date +%Y%m%d%H%M%S)"
-          git checkout -b "$BRANCH_NAME"
-          
-          # Check for changes
-          if [ -z "$(git status --porcelain)" ]; then
-            echo "No changes to sync."
+          git fetch origin "${TARGET_BRANCH}" --prune
+
+          remote_sha="$(git ls-remote --heads origin "refs/heads/${SYNC_BRANCH}" | awk '{print $1}')"
+          echo "remote_sha=${remote_sha}" >> "$GITHUB_OUTPUT"
+
+          if [[ -z "${remote_sha}" ]]; then
+            echo "No existing sync branch. A new bot-owned branch will be created."
             exit 0
           fi
-          
-          # Commit and Push
-          git add .
-          git commit -m "Sync: Update tcwpn-clinical-app from source"
-          git push origin "$BRANCH_NAME"
-          
-          # Open Pull Request using GitHub CLI
-          gh pr create \
-            --title "Sync: Update tcwpn-clinical-app" \
-            --body "This PR was automatically generated to sync changes from the [tcwpn_app](https://github.com/dulhara79/tcwpn_app) repository. Please review and merge." \
-            --base main \
-            --head "$BRANCH_NAME"
+
+          git fetch origin "${SYNC_BRANCH}:refs/remotes/origin/${SYNC_BRANCH}"
+
+          foreign="$(
+            git log --format='%H%x09%ae%x09%s'               "origin/${TARGET_BRANCH}..origin/${SYNC_BRANCH}"             | awk -F '\t' -v expected="${BOT_EMAIL}" '$2 != expected { print }'
+          )"
+
+          if [[ -n "${foreign}" ]]; then
+            echo "::error::The bot-owned sync branch contains commits not authored by ${BOT_EMAIL}."
+            echo "${foreign}"
+            echo "::error::Aborting before any force-with-lease update so human work cannot be overwritten."
+            exit 1
+          fi
+
+      - name: Rebuild mirror from current research main
+        working-directory: target
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          git checkout -B "${SYNC_BRANCH}" "origin/${TARGET_BRANCH}"
+          mkdir -p "${TARGET_DIR}"
+
+          rsync -a --delete             --exclude='.git/'             --exclude='.github/'             ../source/ "${TARGET_DIR}/"
+
+          source_tree="$(git -C ../source rev-parse HEAD^{tree})"
+          source_time="$(git -C ../source show -s --format=%cI HEAD)"
+
+          jq -n             --arg repository "${GITHUB_REPOSITORY}"             --arg branch "${GITHUB_REF_NAME}"             --arg commit "${GITHUB_SHA}"             --arg tree "${source_tree}"             --arg commit_time "${source_time}"             '{
+              schema_version: 1,
+              source_repository: $repository,
+              source_branch: $branch,
+              source_commit: $commit,
+              source_tree: $tree,
+              source_commit_time: $commit_time,
+              ownership: "generated-mirror-do-not-edit-directly"
+            }' > "${TARGET_DIR}/.sync-metadata.json"
+
+      - name: Verify mirror and stage only the owned directory
+        id: changes
+        working-directory: target
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          if ! diff -qr             --exclude='.git'             --exclude='.github'             --exclude='.sync-metadata.json'             ../source "${TARGET_DIR}"; then
+            echo "::error::The mirrored clinician-app tree does not match the approved source checkout."
+            exit 1
+          fi
+
+          git add -A -- "${TARGET_DIR}"
+
+          outside="$(
+            git diff --cached --name-only             | grep -v "^apps/tcwpn-clinical-app/"             || true
+          )"
+
+          if [[ -n "${outside}" ]]; then
+            echo "::error::Synchronization attempted to stage files outside ${TARGET_DIR}:"
+            echo "${outside}"
+            exit 1
+          fi
+
+          echo "Staged mirror changes:"
+          git diff --cached --name-status -- "${TARGET_DIR}"
+
+          if git diff --cached --quiet -- "${TARGET_DIR}"; then
+            echo "changed=false" >> "$GITHUB_OUTPUT"
+            echo "Research repository already matches source commit ${GITHUB_SHA}."
+          else
+            echo "changed=true" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Commit deterministic mirror snapshot
+        if: steps.changes.outputs.changed == 'true'
+        working-directory: target
+        shell: bash
+        run: |
+          set -euo pipefail
+          git config user.name "${BOT_NAME}"
+          git config user.email "${BOT_EMAIL}"
+          git commit -m "chore(sync): mirror ClinAnx from ${GITHUB_SHA::12}"
+
+      - name: Update rolling synchronization branch safely
+        if: steps.changes.outputs.changed == 'true'
+        working-directory: target
+        shell: bash
+        env:
+          REMOTE_SYNC_SHA: ${{ steps.preflight.outputs.remote_sha }}
+        run: |
+          set -euo pipefail
+
+          if [[ -n "${REMOTE_SYNC_SHA}" ]]; then
+            git push               --force-with-lease="refs/heads/${SYNC_BRANCH}:${REMOTE_SYNC_SHA}"               origin "HEAD:refs/heads/${SYNC_BRANCH}"
+          else
+            git push origin "HEAD:refs/heads/${SYNC_BRANCH}"
+          fi
+
+      - name: Create or update one research-repository pull request
+        if: steps.changes.outputs.changed == 'true'
+        working-directory: target
+        shell: bash
+        env:
+          GH_TOKEN: ${{ secrets.SYNC_REPO_TOKEN }}
+        run: |
+          set -euo pipefail
+
+          short_sha="${GITHUB_SHA::12}"
+          source_url="${GITHUB_SERVER_URL}/${GITHUB_REPOSITORY}/commit/${GITHUB_SHA}"
+
+          body="$(cat <<EOF
+          Automated mirror of the approved ClinAnx clinician application.
+
+          - Source repository: \`${GITHUB_REPOSITORY}\`
+          - Source branch: \`${GITHUB_REF_NAME}\`
+          - Source commit: [\`${GITHUB_SHA}\`](${source_url})
+          - Target directory: \`${TARGET_DIR}\`
+          - Sync branch: \`${SYNC_BRANCH}\`
+
+          Safety model:
+          - only source \`main\` is mirrored;
+          - the target branch is rebuilt from the latest R26-DS-012 \`main\`;
+          - only \`${TARGET_DIR}\` may be staged;
+          - updates use force-with-lease and abort if unexpected human commits are detected;
+          - merging remains a reviewed action in R26-DS-012.
+
+          Do not edit \`${TARGET_DIR}\` directly in R26-DS-012. Make clinician-app changes in \`dulhara79/tcwpn_mobile_app\`, merge them to source \`main\`, and let this mirror update the PR.
+          EOF
+          )"
+
+          existing_pr="$(
+            gh pr list               --repo "${TARGET_REPO}"               --state open               --base "${TARGET_BRANCH}"               --head "${SYNC_BRANCH}"               --json number               --jq '.[0].number // empty'
+          )"
+
+          if [[ -n "${existing_pr}" ]]; then
+            gh pr edit "${existing_pr}"               --repo "${TARGET_REPO}"               --title "chore(sync): mirror ClinAnx from ${short_sha}"               --body "${body}"
+            echo "Updated existing target PR #${existing_pr}."
+          else
+            gh pr create               --repo "${TARGET_REPO}"               --base "${TARGET_BRANCH}"               --head "${SYNC_BRANCH}"               --title "chore(sync): mirror ClinAnx from ${short_sha}"               --body "${body}"
+          fi
