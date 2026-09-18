@@ -1,62 +1,189 @@
 import '../../core/config/env.dart';
 import '../../domain/contracts/assessment_summary.dart';
 import '../../domain/contracts/attention_event.dart';
+import '../../domain/contracts/clinician_principal.dart';
 import '../../domain/contracts/dashboard_snapshot.dart';
+import '../../domain/contracts/patient_summary.dart';
 import '../../domain/repositories/assessment_repository.dart';
 import '../../domain/repositories/attention_event_repository.dart';
 import '../../domain/repositories/auth_repository.dart';
 import '../../domain/repositories/dashboard_repository.dart';
+import '../../domain/repositories/patient_repository.dart';
 import '../api/api_client.dart';
 import '../api/session.dart';
-
-const String _contractGateDetail =
-    'Clinician target backend routes are not live-wired because the current '
-    'Central Backend contract has not been verified to expose the required '
-    'clinician principal, assignment-scoped dashboard, latest-assessment, and '
-    'persistent attention-event operations.';
-
-ApiException _contractGate(String operation) => ApiException(
-      kind: ApiFailure.notConfigured,
-      endpoint: operation,
-      detail: _contractGateDetail,
-    );
+import 'composite_dashboard_repository.dart';
 
 class CentralBackendAuthRepository implements AuthRepository {
-  CentralBackendAuthRepository([ApiClient? api]);
+  CentralBackendAuthRepository([ApiClient? api])
+      : _api = api ?? ApiClient(Env.backendBase);
+
+  final ApiClient _api;
 
   @override
   Future<void> validateCurrentSession() async {
-    throw _contractGate('clinician-session-contract');
+    final payload = await _api.get('/v1/me');
+    final principalType =
+        (payload['principal_type'] ?? '').toString().trim().toLowerCase();
+    if (principalType != 'clinician') {
+      throw const ApiException(
+        kind: ApiFailure.forbidden,
+        endpoint: '/v1/me',
+        detail: 'The authenticated principal is not a clinician.',
+      );
+    }
+
+    final principal = ClinicianPrincipal.fromJson(payload);
+    if (!principal.isValid) {
+      throw const ApiException(
+        kind: ApiFailure.malformed,
+        endpoint: '/v1/me',
+        detail: 'The clinician principal is missing clinician_id.',
+      );
+    }
+
+    final localClinicianId = Session.clinicianId?.trim() ?? '';
+    if (localClinicianId.isNotEmpty &&
+        localClinicianId != principal.clinicianId.trim()) {
+      throw const ApiException(
+        kind: ApiFailure.forbidden,
+        endpoint: '/v1/me',
+        detail:
+            'The authenticated clinician does not match the local session identity.',
+      );
+    }
+
+    final token = Session.token;
+    if (localClinicianId.isEmpty && token != null && token.isNotEmpty) {
+      // The Central Backend principal is authoritative. Binding an otherwise
+      // unbound in-memory session here prevents clinical cache access before
+      // server identity has been established.
+      Session.set(token: token, clinicianId: principal.clinicianId);
+    }
   }
 
   @override
   Future<void> expireCurrentSession() => Session.signOut();
 }
 
-class CentralBackendDashboardRepository implements DashboardRepository {
-  CentralBackendDashboardRepository([ApiClient? api]);
-
-  @override
-  Future<DashboardSnapshot> loadDashboard() async {
-    throw _contractGate('clinician-dashboard-contract');
-  }
-}
-
 class CentralBackendAssessmentRepository implements AssessmentRepository {
-  CentralBackendAssessmentRepository([ApiClient? api]);
+  CentralBackendAssessmentRepository([ApiClient? api])
+      : _api = api ?? ApiClient(Env.backendBase);
+
+  final ApiClient _api;
 
   @override
   Future<AssessmentSummary?> latestAssessment(String subjectId) async {
-    throw _contractGate('latest-assessment-contract');
+    final id = _requireSubjectId(subjectId);
+    final path =
+        '/v1/patients/${Uri.encodeComponent(id)}/assessment/latest';
+
+    Map<String, dynamic> payload;
+    try {
+      payload = await _api.get(path);
+    } on ApiException catch (error) {
+      if (error.kind == ApiFailure.notFound) return null;
+      rethrow;
+    }
+
+    final assessment = AssessmentSummary.fromJson(payload);
+    if (assessment.subjectId.trim() != id ||
+        assessment.fusionResultId == null ||
+        assessment.fusionResultId! <= 0 ||
+        (assessment.modelVersion ?? '').trim().isEmpty) {
+      throw ApiException(
+        kind: ApiFailure.malformed,
+        endpoint: path,
+        detail:
+            'Latest assessment did not preserve the requested subject and authoritative fusion provenance.',
+      );
+    }
+    return assessment;
   }
 }
 
-/// Client-first Phase 6 adapter for the frozen target AttentionEvent contract.
+class CentralBackendPatientRepository implements PatientRepository {
+  CentralBackendPatientRepository([ApiClient? api])
+      : _api = api ?? ApiClient(Env.backendBase),
+        _assessments = CentralBackendAssessmentRepository(
+          api ?? ApiClient(Env.backendBase),
+        );
+
+  final ApiClient _api;
+  final CentralBackendAssessmentRepository _assessments;
+
+  @override
+  Future<List<PatientSummary>> assignedPatients() async {
+    const path = '/v1/clinicians/me/patients';
+    final payload = await _api.get(path);
+    final rawPatients = payload['patients'];
+    if (rawPatients is! List) {
+      throw const ApiException(
+        kind: ApiFailure.malformed,
+        endpoint: path,
+        detail: 'Expected a patients array.',
+      );
+    }
+
+    final summaries = <PatientSummary>[];
+    final seen = <String>{};
+    for (final raw in rawPatients) {
+      if (raw is! Map) {
+        throw const ApiException(
+          kind: ApiFailure.malformed,
+          endpoint: path,
+          detail: 'Expected every patients item to be an object.',
+        );
+      }
+
+      final row = Map<String, dynamic>.from(raw);
+      final subjectId = (row['subject_id'] ?? '').toString().trim();
+      if (subjectId.isEmpty || !seen.add(subjectId)) {
+        throw const ApiException(
+          kind: ApiFailure.malformed,
+          endpoint: path,
+          detail:
+              'Assigned-patient roster contains a missing or duplicate subject_id.',
+        );
+      }
+
+      final assessment = await _assessments.latestAssessment(subjectId);
+      summaries.add(
+        PatientSummary(
+          subjectId: subjectId,
+          displayId: _optionalString(row['display_id']),
+          fusionResultId: assessment?.fusionResultId,
+          currentAssessment: assessment?.currentAssessment,
+          forecast: assessment?.forecast,
+          assessmentStatus:
+              assessment?.assessmentStatus ?? AssessmentStatus.unavailable,
+          lastUpdated: assessment?.computedAt,
+          openEventCount: null,
+        ),
+      );
+    }
+
+    return List.unmodifiable(summaries);
+  }
+}
+
+class CentralBackendDashboardRepository implements DashboardRepository {
+  CentralBackendDashboardRepository([ApiClient? api])
+      : _delegate = CompositeDashboardRepository(
+          patients: CentralBackendPatientRepository(api),
+          attentionEvents: CentralBackendAttentionEventRepository(api),
+        );
+
+  final DashboardRepository _delegate;
+
+  @override
+  Future<DashboardSnapshot> loadDashboard() => _delegate.loadDashboard();
+}
+
+/// Adapter for the frozen server-owned AttentionEvent contract.
 ///
-/// The handbook defines these route semantics. The mobile client now implements
-/// them exactly so the Central Backend can be brought up to this contract
-/// independently. The server remains the authority for event creation,
-/// assignment, lifecycle, actor identity and timestamps.
+/// The Central Backend owns event creation, assignment, lifecycle, actor
+/// identity and timestamps. ClinAnx only retrieves and mutates the canonical
+/// server event through the frozen HTTP operations below.
 class CentralBackendAttentionEventRepository
     implements AttentionEventRepository {
   CentralBackendAttentionEventRepository([ApiClient? api])
@@ -183,4 +310,21 @@ class CentralBackendAttentionEventRepository
     }
     return event;
   }
+}
+
+String _requireSubjectId(String subjectId) {
+  final id = subjectId.trim();
+  if (id.isEmpty) {
+    throw const ApiException(
+      kind: ApiFailure.validation,
+      endpoint: 'subject-id',
+      detail: 'subject_id must not be blank.',
+    );
+  }
+  return id;
+}
+
+String? _optionalString(Object? value) {
+  final text = value?.toString().trim() ?? '';
+  return text.isEmpty ? null : text;
 }
