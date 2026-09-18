@@ -5,6 +5,7 @@ import '../../core/design/components.dart';
 import '../../core/design/theme.dart';
 import '../../core/design/tokens.dart';
 import '../../domain/contracts/contract_enums.dart';
+import '../../domain/contracts/dashboard_snapshot.dart';
 import '../../domain/contracts/patient_summary.dart';
 import '../../state/async_data_state.dart';
 import '../../state/dashboard_controller.dart';
@@ -72,7 +73,7 @@ class _PatientsScreenState extends State<PatientsScreen> {
 
   Widget _bodyForState(
     BuildContext context,
-    AsyncDataState<dynamic> state,
+    AsyncDataState<DashboardSnapshot> state,
   ) {
     if (state.status == AsyncDataStatus.loading) {
       return const Center(child: CircularProgressIndicator());
