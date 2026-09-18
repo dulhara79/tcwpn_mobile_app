@@ -59,6 +59,35 @@ Never commit:
 ## 4. Primary research APK
 
 PowerShell:
+```powershell
+# Load .env variables into the current PowerShell session
+Get-Content .env | ForEach-Object {
+    $line = $_.Trim()
+
+    # Skip empty lines and comments
+    if ($line -eq "" -or $line.StartsWith("#")) {
+        return
+    }
+
+    # Split only on the first =
+    $parts = $line -split "=", 2
+
+    if ($parts.Count -eq 2) {
+        $name  = $parts[0].Trim()
+        $value = $parts[1].Trim()
+
+        # Remove surrounding single/double quotes if present
+        if (
+            ($value.StartsWith('"') -and $value.EndsWith('"')) -or
+            ($value.StartsWith("'") -and $value.EndsWith("'"))
+        ) {
+            $value = $value.Substring(1, $value.Length - 2)
+        }
+
+        Set-Item -Path "Env:$name" -Value $value
+    }
+}
+```
 
 ```powershell
 $REVISION = git rev-parse HEAD
@@ -81,6 +110,36 @@ flutter build apk --release `
 ## 5. Secondary Firebase disaster-recovery APK
 
 Build a separate artifact using the Secondary project configuration:
+
+```powershell
+# Load .env variables into the current PowerShell session
+Get-Content .env | ForEach-Object {
+    $line = $_.Trim()
+
+    # Skip empty lines and comments
+    if ($line -eq "" -or $line.StartsWith("#")) {
+        return
+    }
+
+    # Split only on the first =
+    $parts = $line -split "=", 2
+
+    if ($parts.Count -eq 2) {
+        $name  = $parts[0].Trim()
+        $value = $parts[1].Trim()
+
+        # Remove surrounding single/double quotes if present
+        if (
+            ($value.StartsWith('"') -and $value.EndsWith('"')) -or
+            ($value.StartsWith("'") -and $value.EndsWith("'"))
+        ) {
+            $value = $value.Substring(1, $value.Length - 2)
+        }
+
+        Set-Item -Path "Env:$name" -Value $value
+    }
+}
+```
 
 ```powershell
 $REVISION = git rev-parse HEAD
