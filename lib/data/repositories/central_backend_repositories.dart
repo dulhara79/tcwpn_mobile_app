@@ -2,6 +2,7 @@ import '../../core/config/env.dart';
 import '../../domain/contracts/assessment_summary.dart';
 import '../../domain/contracts/attention_event.dart';
 import '../../domain/contracts/clinician_principal.dart';
+import '../../domain/contracts/contract_enums.dart';
 import '../../domain/contracts/dashboard_snapshot.dart';
 import '../../domain/contracts/patient_summary.dart';
 import '../../domain/repositories/assessment_repository.dart';
