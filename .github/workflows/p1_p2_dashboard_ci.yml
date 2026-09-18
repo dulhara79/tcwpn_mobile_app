@@ -150,3 +150,5 @@ jobs:
         run: flutter test
       - name: Full analysis
         run: flutter analyze
+      - name: Debug APK build
+        run: flutter build apk --debug --no-pub
