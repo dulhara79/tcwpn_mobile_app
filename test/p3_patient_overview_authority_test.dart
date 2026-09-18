@@ -14,22 +14,26 @@ void main() {
     expect(source, isNot(contains('"/predict"')));
   });
 
-  test('P3 keeps unverified latest-assessment route out of production adapter',
-      () {
+  test('Phase 5 latest-assessment route is verified and live-wired', () {
     final source = File('lib/data/repositories/central_backend_repositories.dart')
         .readAsStringSync();
 
-    expect(source, isNot(contains('/assessment/latest')));
-    expect(source, contains('ApiFailure.notConfigured'));
+    expect(source, contains('/assessment/latest'));
+    expect(source, contains('AssessmentSummary.fromJson'));
+    expect(source, isNot(contains('latest-assessment-contract')));
   });
 
-  test('legacy Patients resolves identity rather than treating MRN as subject id',
-      () {
+  test('Patients screen consumes the assigned server roster', () {
     final source =
         File('lib/features/patients/patients_screen.dart').readAsStringSync();
 
-    expect(source, contains('resolveAppUserId'));
-    expect(source, contains('resolveMrn'));
-    expect(source, isNot(contains('subjectId: patient.mrn')));
+    expect(source, contains('DashboardController'));
+    expect(source, contains('assignedPatients'));
+    expect(source, contains('PatientSummary'));
+    expect(source, isNot(contains('RosterController')));
+    expect(source, isNot(contains('resolveMrn')));
+    expect(source, isNot(contains('resolveAppUserId')));
+    expect(source, isNot(contains('FusionResult')));
+    expect(source, isNot(contains('AlertBandX.fromScore')));
   });
 }
