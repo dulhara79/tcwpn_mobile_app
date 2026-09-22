@@ -18,9 +18,8 @@ infrastructure.
 - ClinAnx already had typed assessment/event contracts, a fusion-first Patient
   Overview, server AttentionEvent views/actions, explicit unavailable states,
   C3 wording as Clinical NLP / TC-WPN, and C2 experimental/excluded wording.
-- ClinAnx still deliberately blocked its production auth/dashboard/latest
-  assessment repositories because those contracts had not been verified when
-  that guard was written.
+- This branch removes the former production contract gates now that the
+  Central Backend routes and response semantics are frozen and implemented.
 - The Patients tab still used a clinician-local roster and legacy FusionResult
   presentation rather than the server assignment roster.
 
@@ -53,15 +52,16 @@ an assignment-aware presentation client over Central Backend state:
 - `CentralBackendAssessmentRepository` loads
   `/v1/patients/{subject_id}/assessment/latest` and preserves
   `fusion_result_id`, forecast identity, timestamps and model provenance.
-- A 404 latest-assessment response is represented as unavailable; no Low score
-  is fabricated.
+- A canonical 200 response with `assessment_status=unavailable` and null
+  assessment identity is represented as unavailable; no Low score is fabricated.
 - `CentralBackendPatientRepository` consumes only
   `/v1/clinicians/me/patients`. It does not discover or resolve arbitrary
   patient identifiers.
-- The dashboard is composed from three verified canonical sources:
-  assigned-patient roster, per-patient latest AssessmentSummary and
-  assignment-scoped OPEN AttentionEvents. No unverified dashboard aggregate
-  route is guessed.
+- `CentralBackendDashboardRepository` consumes the frozen
+  `/v1/clinicians/me/dashboard` aggregate directly, including clinician,
+  authoritative assigned count, OPEN AttentionEvents and patient summaries.
+- `CentralBackendPatientRepository` consumes the summary rows returned by the
+  assignment roster directly; it does not perform per-patient N+1 requests.
 - Existing AttentionEvent ACK/RESOLVE calls continue to send the frozen empty
   body `{}`; actor and timestamp remain server-derived.
 
@@ -104,21 +104,14 @@ The attention severity parser accepts the Phase 4 policy outputs
 
 ## KNOWN LIMITATIONS / DEPLOYMENT DEPENDENCIES
 
-1. The verified backend does not currently expose
-   `/v1/clinicians/me/dashboard`. ClinAnx therefore composes its read-only
-   dashboard from verified assignment, assessment and event endpoints. This is
-   orchestration only; it does not calculate risk or urgency.
-2. The current assigned-patient roster response contains `subject_id` and
-   assignment timestamp, but no study display label. The UI therefore falls
-   back to the canonical subject ID when no display label is supplied.
-3. A real ClinAnx session token must be verifiable by the Central Backend's
+1. A real ClinAnx session token must be verifiable by the Central Backend's
    configured JWT verifier. Demo/local authentication tokens are not a
    substitute for a production/research clinician JWT.
-4. Server-side clinical-note history remains a separate contract issue. The
+2. Server-side clinical-note history remains a separate contract issue. The
    authoritative note-analysis submission stays Central Backend -> C3, followed
    by canonical assessment refresh; local note draft/history must not be
    interpreted as model authority.
-5. Existing push/polling code predates this Phase 5 branch. Server
+3. Existing push/polling code predates this Phase 5 branch. Server
    AttentionEvent remains authoritative regardless of notification delivery.
 
 ## Security / authority guarantees preserved

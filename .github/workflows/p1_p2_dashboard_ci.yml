@@ -83,12 +83,9 @@ jobs:
           fi
           if ! grep -q "'/v1/me'" lib/data/repositories/central_backend_repositories.dart || \
              ! grep -q "'/v1/clinicians/me/patients'" lib/data/repositories/central_backend_repositories.dart || \
+             ! grep -q "'/v1/clinicians/me/dashboard'" lib/data/repositories/central_backend_repositories.dart || \
              ! grep -q "/assessment/latest" lib/data/repositories/central_backend_repositories.dart; then
             echo 'Phase 5 verified Central Backend clinician routes are not all wired.'
-            exit 1
-          fi
-          if grep -q "'/v1/clinicians/me/dashboard'" lib/data/repositories/central_backend_repositories.dart; then
-            echo 'Do not guess a dashboard aggregate route that is not present in the verified backend.'
             exit 1
           fi
           if grep -nE 'RosterController|FusionResult|resolveMrn|resolveAppUserId|AlertBandX\.fromScore' lib/features/patients/patients_screen.dart; then
