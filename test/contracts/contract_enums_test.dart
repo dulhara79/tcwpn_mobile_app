@@ -56,6 +56,9 @@ void main() {
   test('modality state preserves unavailable/experimental/error semantics', () {
     expect(ModalityState.fromWire('ok'), ModalityState.ok);
     expect(ModalityState.fromWire('stale'), ModalityState.stale);
+    expect(ModalityState.fromWire('poor_signal'), ModalityState.stale);
+    expect(ModalityState.fromWire('warming_up'), ModalityState.unavailable);
+    expect(ModalityState.fromWire('insufficient_data'), ModalityState.unavailable);
     expect(
       ModalityState.fromWire('not_validated'),
       ModalityState.notValidated,
@@ -81,7 +84,8 @@ void main() {
     );
   });
 
-  test('severity only claims values documented in the current target example', () {
+  test('attention severity parses verified Phase 4 policy values', () {
+    expect(AttentionSeverity.fromWire('elevated'), AttentionSeverity.elevated);
     expect(AttentionSeverity.fromWire('high'), AttentionSeverity.high);
     expect(AttentionSeverity.fromWire('critical'), AttentionSeverity.unknown);
   });

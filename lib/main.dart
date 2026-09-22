@@ -51,6 +51,7 @@ Future<void> main() async {
     Session.set(
       token: await SecureStore.token() ?? '',
       clinicianId: await SecureStore.clinicianId(),
+      expiresAt: await SecureStore.expiresAt(),
     );
   }
 

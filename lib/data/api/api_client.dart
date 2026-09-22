@@ -138,6 +138,15 @@ class ApiClient {
     Future<http.Response> Function() run,
     String endpoint,
   ) async {
+    if (Session.isExpired) {
+      await Session.signOut();
+      throw ApiException(
+        kind: ApiFailure.unauthorized,
+        statusCode: 401,
+        endpoint: endpoint,
+        detail: 'The clinician session expired before this request.',
+      );
+    }
     if (baseUrl.isEmpty) {
       throw ApiException(
         kind: ApiFailure.notConfigured,

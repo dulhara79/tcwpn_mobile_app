@@ -217,7 +217,7 @@ class _AppShellState extends State<AppShell> with WidgetsBindingObserver {
           index: _tab,
           children: [
             ServerDashboardScreen(controller: _dashboardController),
-            const PatientsScreen(),
+            PatientsScreen(controller: _dashboardController),
             const ActivityScreen.production(),
             const SettingsScreen(),
             const AskCareScreen(),
