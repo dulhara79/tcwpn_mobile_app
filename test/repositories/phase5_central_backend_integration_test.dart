@@ -70,12 +70,10 @@ void main() {
         expect(request.url.path, '/v1/me');
         return http.Response(
           jsonEncode({
-            'principal_type': 'clinician',
-            'principal_id': 'principal-1',
             'clinician_id': 'DR001',
             'display_name': 'Clinician One',
             'role': 'clinician',
-            'status': 'active',
+            'token_id': 'session-1',
             'expires_at': '2026-09-19T00:00:00Z',
           }),
           200,
@@ -94,11 +92,9 @@ void main() {
       bearer: () => 'test-session',
       client: MockClient((request) async => http.Response(
             jsonEncode({
-              'principal_type': 'clinician',
-              'principal_id': 'principal-2',
               'clinician_id': 'DR002',
               'role': 'clinician',
-              'status': 'active',
+              'token_id': 'session-2',
             }),
             200,
           )),
@@ -143,6 +139,33 @@ void main() {
     );
   });
 
+  test('latest assessment accepts canonical unavailable state', () async {
+    final api = ApiClient(
+      'https://backend.test',
+      bearer: () => 'test-session',
+      client: MockClient((request) async => http.Response(
+            jsonEncode({
+              'subject_id': 'subject-001',
+              'fusion_result_id': null,
+              'current_assessment': null,
+              'forecast': null,
+              'confidence': null,
+              'assessment_status': 'unavailable',
+              'modalities': [],
+              'computed_at': null,
+              'model_version': null,
+            }),
+            200,
+          )),
+    );
+
+    final result = await CentralBackendAssessmentRepository(api)
+        .latestAssessment('subject-001');
+    expect(result?.assessmentStatus, AssessmentStatus.unavailable);
+    expect(result?.fusionResultId, isNull);
+    expect(result?.currentAssessment, isNull);
+  });
+
   test('assigned roster keeps patients with no current assessment unavailable',
       () async {
     final api = ApiClient(
@@ -152,24 +175,29 @@ void main() {
         if (request.url.path == '/v1/clinicians/me/patients') {
           return http.Response(
             jsonEncode({
-              'clinician_id': 'DR001',
               'patients': [
-                {'subject_id': 'subject-001'},
-                {'subject_id': 'subject-002'},
+                {
+                  'subject_id': 'subject-001',
+                  'fusion_result_id': 123,
+                  'current': {'score': 0.58, 'tier': 'Medium'},
+                  'forecast': {
+                    'score': 0.84,
+                    'tier': 'High',
+                    'horizon_minutes': 10,
+                    'predicted': true,
+                  },
+                  'assessment_status': 'complete',
+                  'last_updated': '2026-09-18T12:00:00Z',
+                  'open_event_count': 1,
+                },
+                {
+                  'subject_id': 'subject-002',
+                  'assessment_status': 'unavailable',
+                  'open_event_count': 0,
+                },
               ],
             }),
             200,
-          );
-        }
-        if (request.url.path ==
-            '/v1/patients/subject-001/assessment/latest') {
-          return http.Response(jsonEncode(assessment('subject-001')), 200);
-        }
-        if (request.url.path ==
-            '/v1/patients/subject-002/assessment/latest') {
-          return http.Response(
-            jsonEncode({'detail': 'assessment unavailable'}),
-            404,
           );
         }
         return http.Response('{}', 404);
@@ -186,5 +214,43 @@ void main() {
     expect(patients.first.fusionResultId, 123);
     expect(patients.last.assessmentStatus, AssessmentStatus.unavailable);
     expect(patients.last.currentAssessment, isNull);
+    expect(patients.first.forecast?.escalationPredicted, isTrue);
+  });
+
+  test('dashboard uses the frozen aggregate without client composition', () async {
+    final api = ApiClient(
+      'https://backend.test',
+      bearer: () => 'test-session',
+      client: MockClient((request) async {
+        expect(request.url.path, '/v1/clinicians/me/dashboard');
+        return http.Response(
+          jsonEncode({
+            'clinician': {
+              'clinician_id': 'DR001',
+              'display_name': 'Clinician One',
+            },
+            'assigned_count': 1,
+            'open_attention_events': [],
+            'patients': [
+              {
+                'subject_id': 'subject-001',
+                'fusion_result_id': 123,
+                'current': {'score': 0.58, 'tier': 'Medium'},
+                'assessment_status': 'complete',
+                'last_updated': '2026-09-18T12:00:00Z',
+                'open_event_count': 0,
+              },
+            ],
+          }),
+          200,
+        );
+      }),
+    );
+
+    final result = await CentralBackendDashboardRepository(api).loadDashboard();
+    expect(result.clinician?.clinicianId, 'DR001');
+    expect(result.assignedCount, 1);
+    expect(result.assignedPatients.single.fusionResultId, 123);
+    expect(result.isFromCache, isFalse);
   });
 }

@@ -12,7 +12,6 @@ import '../../domain/repositories/dashboard_repository.dart';
 import '../../domain/repositories/patient_repository.dart';
 import '../api/api_client.dart';
 import '../api/session.dart';
-import 'composite_dashboard_repository.dart';
 
 class CentralBackendAuthRepository implements AuthRepository {
   CentralBackendAuthRepository([ApiClient? api])
@@ -23,22 +22,20 @@ class CentralBackendAuthRepository implements AuthRepository {
   @override
   Future<void> validateCurrentSession() async {
     final payload = await _api.get('/v1/me');
-    final principalType =
-        (payload['principal_type'] ?? '').toString().trim().toLowerCase();
-    if (principalType != 'clinician') {
-      throw const ApiException(
-        kind: ApiFailure.forbidden,
-        endpoint: '/v1/me',
-        detail: 'The authenticated principal is not a clinician.',
-      );
-    }
-
     final principal = ClinicianPrincipal.fromJson(payload);
     if (!principal.isValid) {
       throw const ApiException(
         kind: ApiFailure.malformed,
         endpoint: '/v1/me',
         detail: 'The clinician principal is missing clinician_id.',
+      );
+    }
+    final role = principal.role?.trim().toLowerCase();
+    if (role != null && role.isNotEmpty && role != 'clinician' && role != 'doctor') {
+      throw const ApiException(
+        kind: ApiFailure.forbidden,
+        endpoint: '/v1/me',
+        detail: 'The authenticated principal is not a clinician.',
       );
     }
 
@@ -87,10 +84,19 @@ class CentralBackendAssessmentRepository implements AssessmentRepository {
     }
 
     final assessment = AssessmentSummary.fromJson(payload);
+    final unavailable =
+        assessment.assessmentStatus == AssessmentStatus.unavailable;
+    final invalidUnavailable = unavailable &&
+        (assessment.fusionResultId != null ||
+            assessment.currentAssessment != null);
+    final invalidAssessment = !unavailable &&
+        (assessment.fusionResultId == null ||
+            assessment.fusionResultId! <= 0 ||
+            assessment.currentAssessment == null ||
+            (assessment.modelVersion ?? '').trim().isEmpty);
     if (assessment.subjectId.trim() != id ||
-        assessment.fusionResultId == null ||
-        assessment.fusionResultId! <= 0 ||
-        (assessment.modelVersion ?? '').trim().isEmpty) {
+        invalidUnavailable ||
+        invalidAssessment) {
       throw ApiException(
         kind: ApiFailure.malformed,
         endpoint: path,
@@ -104,13 +110,9 @@ class CentralBackendAssessmentRepository implements AssessmentRepository {
 
 class CentralBackendPatientRepository implements PatientRepository {
   CentralBackendPatientRepository([ApiClient? api])
-      : _api = api ?? ApiClient(Env.backendBase),
-        _assessments = CentralBackendAssessmentRepository(
-          api ?? ApiClient(Env.backendBase),
-        );
+      : _api = api ?? ApiClient(Env.backendBase);
 
   final ApiClient _api;
-  final CentralBackendAssessmentRepository _assessments;
 
   @override
   Future<List<PatientSummary>> assignedPatients() async {
@@ -147,20 +149,15 @@ class CentralBackendPatientRepository implements PatientRepository {
         );
       }
 
-      final assessment = await _assessments.latestAssessment(subjectId);
-      summaries.add(
-        PatientSummary(
-          subjectId: subjectId,
-          displayId: _optionalString(row['display_id']),
-          fusionResultId: assessment?.fusionResultId,
-          currentAssessment: assessment?.currentAssessment,
-          forecast: assessment?.forecast,
-          assessmentStatus:
-              assessment?.assessmentStatus ?? AssessmentStatus.unavailable,
-          lastUpdated: assessment?.computedAt,
-          openEventCount: null,
-        ),
-      );
+      final summary = PatientSummary.fromJson(row);
+      if (summary.subjectId != subjectId) {
+        throw const ApiException(
+          kind: ApiFailure.malformed,
+          endpoint: path,
+          detail: 'Assigned-patient summary changed subject identity.',
+        );
+      }
+      summaries.add(summary);
     }
 
     return List.unmodifiable(summaries);
@@ -169,15 +166,30 @@ class CentralBackendPatientRepository implements PatientRepository {
 
 class CentralBackendDashboardRepository implements DashboardRepository {
   CentralBackendDashboardRepository([ApiClient? api])
-      : _delegate = CompositeDashboardRepository(
-          patients: CentralBackendPatientRepository(api),
-          attentionEvents: CentralBackendAttentionEventRepository(api),
-        );
+      : _api = api ?? ApiClient(Env.backendBase);
 
-  final DashboardRepository _delegate;
+  final ApiClient _api;
 
   @override
-  Future<DashboardSnapshot> loadDashboard() => _delegate.loadDashboard();
+  Future<DashboardSnapshot> loadDashboard() async {
+    const path = '/v1/clinicians/me/dashboard';
+    final payload = await _api.get(path);
+    final snapshot = DashboardSnapshot.fromJson(
+      {
+        ...payload,
+        'fetched_at': DateTime.now().toUtc().toIso8601String(),
+      },
+      isFromCache: false,
+    );
+    if (snapshot.assignedCount != snapshot.assignedPatients.length) {
+      throw const ApiException(
+        kind: ApiFailure.malformed,
+        endpoint: path,
+        detail: 'Dashboard assigned_count does not match patients.',
+      );
+    }
+    return snapshot;
+  }
 }
 
 /// Adapter for the frozen server-owned AttentionEvent contract.
@@ -323,9 +335,4 @@ String _requireSubjectId(String subjectId) {
     );
   }
   return id;
-}
-
-String? _optionalString(Object? value) {
-  final text = value?.toString().trim() ?? '';
-  return text.isEmpty ? null : text;
 }
