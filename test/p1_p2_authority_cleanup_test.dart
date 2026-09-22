@@ -31,8 +31,8 @@ void main() {
 
     expect(source, contains("'/v1/me'"));
     expect(source, contains("'/v1/clinicians/me/patients'"));
+    expect(source, contains("'/v1/clinicians/me/dashboard'"));
     expect(source, contains('/assessment/latest'));
     expect(source, contains("'/v1/attention-events'"));
-    expect(source, isNot(contains("'/v1/clinicians/me/dashboard'")));
   });
 }

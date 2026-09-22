@@ -163,7 +163,8 @@ void main() {
         .latestAssessment('subject-001');
     expect(result?.assessmentStatus, AssessmentStatus.unavailable);
     expect(result?.fusionResultId, isNull);
-    expect(result?.currentAssessment, isNull);
+    expect(result?.currentAssessment.score, isNull);
+    expect(result?.currentAssessment.tier, RiskTier.unknown);
   });
 
   test('assigned roster keeps patients with no current assessment unavailable',

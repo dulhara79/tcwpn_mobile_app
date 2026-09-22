@@ -88,7 +88,9 @@ class CentralBackendAssessmentRepository implements AssessmentRepository {
         assessment.assessmentStatus == AssessmentStatus.unavailable;
     final invalidUnavailable = unavailable &&
         (assessment.fusionResultId != null ||
-            assessment.currentAssessment != null);
+            assessment.currentAssessment.score != null ||
+            assessment.currentAssessment.tier != RiskTier.unknown ||
+            assessment.currentAssessment.band != null);
     final invalidAssessment = !unavailable &&
         (assessment.fusionResultId == null ||
             assessment.fusionResultId! <= 0 ||
@@ -177,7 +179,8 @@ class CentralBackendDashboardRepository implements DashboardRepository {
     final snapshot = DashboardSnapshot.fromJson(
       {
         ...payload,
-        'fetched_at': DateTime.now().toUtc().toIso8601String(),
+        // Client fetch time is cache metadata only, never clinical authority.
+        'fetched_at': DateTime.timestamp().toUtc().toIso8601String(),
       },
       isFromCache: false,
     );
