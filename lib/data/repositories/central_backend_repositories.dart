@@ -94,7 +94,6 @@ class CentralBackendAssessmentRepository implements AssessmentRepository {
     final invalidAssessment = !unavailable &&
         (assessment.fusionResultId == null ||
             assessment.fusionResultId! <= 0 ||
-            assessment.currentAssessment == null ||
             (assessment.modelVersion ?? '').trim().isEmpty);
     if (assessment.subjectId.trim() != id ||
         invalidUnavailable ||
