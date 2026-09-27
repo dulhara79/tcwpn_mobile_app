@@ -21,9 +21,14 @@ This repository can verify mobile behavior and client contracts, but it cannot i
 
 Those require integrated backend/patient-app evidence.
 
-## 3. Some target backend adapters remain contract-gated
+## 3. Non-P0 backend adapters can remain contract-gated
 
-The mobile code deliberately fails explicitly when a target backend contract has not been verified. It does not silently substitute local risk logic or guessed endpoints.
+The P0 clinician identity, dashboard, assignment roster, latest assessment,
+assessment history, data-quality and AttentionEvent adapters are live-wired to
+the frozen Central Backend contract. Other integrations, including the
+device-token registry and authoritative server-side clinical-note history, can
+still remain unavailable until their matching backend contract is implemented
+and verified.
 
 This means some screens/flows may remain unavailable until the backend owner exposes the matching authenticated contract defined by the handbook/mobile client.
 

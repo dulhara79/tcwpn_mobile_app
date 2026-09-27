@@ -1,8 +1,8 @@
 # ClinAnx Phase 6 — Frozen AttentionEvent API Contract
 
-Status: **client-first contract implemented in ClinAnx; Central Backend implementation pending**.
+Status: **implemented in ClinAnx and the Central Backend; frozen P0 contract live-wired**.
 
-This contract is based on the R26-DS-012 integration handbook target routes and the existing ClinAnx `AttentionEvent` domain model. It is intentionally explicit so the backend can be implemented independently without changing the mobile client.
+This contract is based on the R26-DS-012 integration handbook target routes and the existing ClinAnx `AttentionEvent` domain model. The Central Backend implementation was merged in `UVINDUSEN/component4final` PR #16, and ClinAnx consumes the same routes through its authenticated Central Backend repositories.
 
 ## Authority rules
 
@@ -230,4 +230,10 @@ ClinAnx now expects this exact contract through `CentralBackendAttentionEventRep
 - no local fallback event when backend is unavailable;
 - `401`, `403`, `404`, `409`, validation, server and malformed-response errors remain explicit.
 
-Until the Central Backend implements these endpoints, production calls will fail at transport/runtime; the mobile contract itself is frozen and test-covered.
+The Central Backend now implements these endpoints with persistent database state,
+assignment checks, atomic lifecycle updates and server-derived actors/timestamps.
+Central Backend PR #18 adds contract coverage for assignment denial, canonical
+conflict behavior, fresh-session persistence and one-event-per-episode
+deduplication. Deployment
+verification still has to confirm the configured database, JWT issuer/audience,
+multi-instance behavior and real client connectivity in the target environment.
