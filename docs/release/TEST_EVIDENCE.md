@@ -113,12 +113,24 @@ Record tester/date/build/commit when these are run.
 
 ## 7. Cross-system evidence — outside mobile CI
 
-This repository alone cannot prove:
+The following repository-level automated evidence now exists in the Central
+Backend:
 
-- server-side assignment enforcement;
-- same patient/clinician `fusion_result_id` from a live integrated backend;
-- event persistence across backend restarts;
-- multi-clinician lifecycle concurrency;
+- merged PR #16 implements the frozen clinician/P0 routes, persistence and
+  assignment boundary;
+- merged PR #17 proves the patient and clinician projections share the same
+  authoritative `fusion_result_id`, including the unavailable state;
+- Central Backend PR #18 adds coverage for assignment-scoped event access,
+  actor/timestamp persistence through fresh database sessions, canonical
+  `409` conflict behavior, one-event-per-episode deduplication and malformed
+  clinician JWT `401` semantics.
+
+That backend evidence complements, but does not replace, live integrated
+environment verification. This mobile repository alone still cannot prove:
+
+- the deployed database preserves events across process/host restarts;
+- the configured production/research JWT issuer, audience and key material;
+- multi-instance lifecycle concurrency against the deployed database;
 - patient and clinician notification delivery of the same server event;
 - backend audit durability;
 - full end-to-end dress rehearsal.
