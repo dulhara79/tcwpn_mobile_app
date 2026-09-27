@@ -7,14 +7,6 @@ import 'package:r26_ds012_app/data/api/api_client.dart';
 import 'package:r26_ds012_app/data/repositories/central_backend_repositories.dart';
 import 'package:r26_ds012_app/domain/contracts/contract_enums.dart';
 
-Matcher _notConfigured() => throwsA(
-      isA<ApiException>().having(
-        (e) => e.kind,
-        'kind',
-        ApiFailure.notConfigured,
-      ),
-    );
-
 const _event = <String, dynamic>{
   'id': 'evt-001',
   'subject_id': 'subject-001',
@@ -34,41 +26,6 @@ const _event = <String, dynamic>{
 };
 
 void main() {
-  ApiClient noNetworkApi() => ApiClient(
-        'https://backend.test',
-        client: MockClient((request) async {
-          throw StateError(
-            'Unverified target adapter attempted network call: ${request.url}',
-          );
-        }),
-        bearer: () => 'clinician-jwt',
-      );
-
-  test('auth target adapter remains blocked until backend contract is verified',
-      () async {
-    await expectLater(
-      CentralBackendAuthRepository(noNetworkApi()).validateCurrentSession(),
-      _notConfigured(),
-    );
-  });
-
-  test('dashboard target adapter remains blocked until backend contract is verified',
-      () async {
-    await expectLater(
-      CentralBackendDashboardRepository(noNetworkApi()).loadDashboard(),
-      _notConfigured(),
-    );
-  });
-
-  test('latest assessment target adapter remains blocked until backend contract is verified',
-      () async {
-    await expectLater(
-      CentralBackendAssessmentRepository(noNetworkApi())
-          .latestAssessment('subject-001'),
-      _notConfigured(),
-    );
-  });
-
   test('openEvents uses frozen Phase 6 target contract and parses server event',
       () async {
     final api = ApiClient(

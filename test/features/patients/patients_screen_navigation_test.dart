@@ -1,18 +1,45 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
-import 'package:provider/provider.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
-import 'package:r26_ds012_app/domain/models.dart';
+import 'package:r26_ds012_app/domain/contracts/assessment_summary.dart';
+import 'package:r26_ds012_app/domain/contracts/contract_enums.dart';
+import 'package:r26_ds012_app/domain/contracts/dashboard_snapshot.dart';
+import 'package:r26_ds012_app/domain/contracts/patient_summary.dart';
+import 'package:r26_ds012_app/domain/repositories/dashboard_repository.dart';
 import 'package:r26_ds012_app/features/patients/patients_screen.dart';
-import 'package:r26_ds012_app/state/controllers.dart';
+import 'package:r26_ds012_app/state/dashboard_controller.dart';
 
-Patient _patient(String id) => Patient(
-      mrn: id,
-      name: 'Patient A',
-      age: 24,
-      gender: 'Female',
-      referredOn: DateTime.utc(2026, 9, 1),
+class _DashboardRepository implements DashboardRepository {
+  final DashboardSnapshot snapshot;
+
+  _DashboardRepository(this.snapshot);
+
+  @override
+  Future<DashboardSnapshot> loadDashboard() async => snapshot;
+}
+
+PatientSummary _patient({
+  required String subjectId,
+  required String displayId,
+  required AssessmentStatus status,
+  int? fusionResultId,
+}) =>
+    PatientSummary(
+      subjectId: subjectId,
+      displayId: displayId,
+      fusionResultId: fusionResultId,
+      currentAssessment: status == AssessmentStatus.unavailable
+          ? null
+          : const CurrentAssessment(
+              score: 0.58,
+              tier: RiskTier.medium,
+              band: 'AMBER',
+            ),
+      forecast: null,
+      assessmentStatus: status,
+      lastUpdated: DateTime.utc(2026, 9, 18, 12),
+      openEventCount: null,
     );
 
 void main() {
@@ -20,108 +47,119 @@ void main() {
     SharedPreferences.setMockInitialValues({});
   });
 
-  testWidgets(
-      'legacy Patients resolves canonical subject before opening Patient Overview',
+  testWidgets('Patients renders only the assignment-scoped server roster',
       (tester) async {
-    final roster = RosterController();
-    final patient = _patient('P_65DC4002E7863773');
-    await roster.addPatient(patient);
-    String? resolvedInput;
-    String? openedSubject;
-    Patient? openedPatient;
-    var legacyOpened = false;
+    final snapshot = DashboardSnapshot(
+      openEvents: const [],
+      assignedPatients: [
+        _patient(
+          subjectId: 'subject-assigned-1',
+          displayId: 'Assigned A',
+          status: AssessmentStatus.complete,
+          fusionResultId: 123,
+        ),
+        _patient(
+          subjectId: 'subject-assigned-2',
+          displayId: 'Assigned B',
+          status: AssessmentStatus.unavailable,
+        ),
+      ],
+      fetchedAt: DateTime.utc(2026, 9, 18, 12),
+    );
+    final controller = DashboardController(
+      repository: _DashboardRepository(snapshot),
+    );
+    await controller.load();
 
     await tester.pumpWidget(
-      ChangeNotifierProvider.value(
-        value: roster,
-        child: MaterialApp(
-          home: PatientsScreen(
-            resolveSubjectId: (value) async {
-              resolvedInput = value;
-              return 'subject-001';
-            },
-            onOpenOverview: (context, patient, subjectId) {
-              openedPatient = patient;
-              openedSubject = subjectId;
-            },
-            onOpenLegacyChart: (context, patient) {
-              legacyOpened = true;
-            },
-          ),
-        ),
+      MaterialApp(
+        home: PatientsScreen(controller: controller),
       ),
     );
-
-    await tester.tap(find.text('Patient A'));
     await tester.pumpAndSettle();
 
-    expect(resolvedInput, patient.mrn);
-    expect(openedSubject, 'subject-001');
-    expect(openedPatient, same(patient));
-    expect(legacyOpened, isFalse);
+    expect(find.text('Assigned A'), findsOneWidget);
+    expect(find.text('Assigned B'), findsOneWidget);
+    expect(find.textContaining('Current multimodal assessment: Medium'), findsOneWidget);
+    expect(find.text('Current assessment: unavailable'), findsOneWidget);
+    expect(
+      find.text('Assessment unavailable — insufficient current data'),
+      findsOneWidget,
+    );
   });
 
-  testWidgets('unresolved legacy patient falls back to existing chart path',
+  testWidgets('tapping assigned patient preserves canonical subject id',
       (tester) async {
-    final roster = RosterController();
-    final patient = _patient('LOCAL-001');
-    await roster.addPatient(patient);
-    var overviewOpened = false;
-    Patient? legacyPatient;
-
-    await tester.pumpWidget(
-      ChangeNotifierProvider.value(
-        value: roster,
-        child: MaterialApp(
-          home: PatientsScreen(
-            resolveSubjectId: (_) async => null,
-            onOpenOverview: (context, patient, subjectId) {
-              overviewOpened = true;
-            },
-            onOpenLegacyChart: (context, patient) {
-              legacyPatient = patient;
-            },
-          ),
+    final patient = _patient(
+      subjectId: 'canonical-subject-001',
+      displayId: 'Assigned A',
+      status: AssessmentStatus.complete,
+      fusionResultId: 321,
+    );
+    final controller = DashboardController(
+      repository: _DashboardRepository(
+        DashboardSnapshot(
+          openEvents: const [],
+          assignedPatients: [patient],
+          fetchedAt: DateTime.utc(2026, 9, 18, 12),
         ),
       ),
     );
+    await controller.load();
+    PatientSummary? opened;
 
-    await tester.tap(find.text('Patient A'));
+    await tester.pumpWidget(
+      MaterialApp(
+        home: PatientsScreen(
+          controller: controller,
+          onOpenPatient: (value) => opened = value,
+        ),
+      ),
+    );
     await tester.pumpAndSettle();
 
-    expect(overviewOpened, isFalse);
-    expect(legacyPatient, same(patient));
+    await tester.tap(find.text('Assigned A'));
+    await tester.pump();
+
+    expect(opened?.subjectId, 'canonical-subject-001');
+    expect(opened?.fusionResultId, 321);
   });
 
-  testWidgets('resolver failure never fabricates a canonical subject id',
+  testWidgets('search cannot reveal a patient absent from server assignments',
       (tester) async {
-    final roster = RosterController();
-    final patient = _patient('LOCAL-002');
-    await roster.addPatient(patient);
-    String? openedSubject;
-    Patient? legacyPatient;
-
-    await tester.pumpWidget(
-      ChangeNotifierProvider.value(
-        value: roster,
-        child: MaterialApp(
-          home: PatientsScreen(
-            resolveSubjectId: (_) async => throw StateError('offline'),
-            onOpenOverview: (context, patient, subjectId) {
-              openedSubject = subjectId;
-            },
-            onOpenLegacyChart: (context, patient) {
-              legacyPatient = patient;
-            },
-          ),
+    final controller = DashboardController(
+      repository: _DashboardRepository(
+        DashboardSnapshot(
+          openEvents: const [],
+          assignedPatients: [
+            _patient(
+              subjectId: 'assigned-only',
+              displayId: 'Assigned Only',
+              status: AssessmentStatus.complete,
+              fusionResultId: 7,
+            ),
+          ],
+          fetchedAt: DateTime.utc(2026, 9, 18, 12),
         ),
       ),
     );
+    await controller.load();
 
-    await tester.tap(find.text('Patient A'));
+    await tester.pumpWidget(
+      MaterialApp(home: PatientsScreen(controller: controller)),
+    );
     await tester.pumpAndSettle();
 
-    expect(openedSubject, isNull);
-    expect(legacyPatient, same(patient));
+    await tester.enterText(
+      find.byType(TextField),
+      'unassigned-guessed-id',
+    );
+    await tester.pump();
+
+    expect(find.text('Assigned Only'), findsNothing);
+    expect(
+      find.text('No assigned patients match the current filters.'),
+      findsOneWidget,
+    );
   });
 }

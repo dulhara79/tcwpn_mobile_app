@@ -52,9 +52,14 @@ enum ModalityState {
   static ModalityState fromWire(Object? value) =>
       switch ((value ?? '').toString().trim().toLowerCase()) {
         'ok' => ok,
-        'stale' => stale,
+        // The frozen backend contract represents stale evidence as poor_signal.
+        'stale' || 'poor_signal' => stale,
         'not_validated' => notValidated,
-        'absent' || 'unavailable' || 'no_support_set' => unavailable,
+        'absent' ||
+        'unavailable' ||
+        'warming_up' ||
+        'insufficient_data' ||
+        'no_support_set' => unavailable,
         'error' => error,
         _ => unknown,
       };
@@ -76,11 +81,13 @@ enum AttentionEventStatus {
 }
 
 enum AttentionSeverity {
+  elevated,
   high,
   unknown;
 
   static AttentionSeverity fromWire(Object? value) =>
       switch ((value ?? '').toString().trim().toLowerCase()) {
+        'elevated' => elevated,
         'high' => high,
         _ => unknown,
       };

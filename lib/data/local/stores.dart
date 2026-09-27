@@ -32,23 +32,40 @@ class SecureStore {
   static const _kClinicianId = 'clinician_id';
   static const _kClinicianName = 'clinician_name';
   static const _kSessionToken = 'session_token';
+  static const _kSessionExpiresAt = 'session_expires_at';
 
   static Future<void> saveSession({
     required String clinicianId,
     required String clinicianName,
     required String token,
+    DateTime? expiresAt,
   }) async {
     await _s.write(key: _kClinicianId, value: clinicianId);
     await _s.write(key: _kClinicianName, value: clinicianName);
     await _s.write(key: _kSessionToken, value: token);
+    if (expiresAt != null) {
+      await _s.write(
+        key: _kSessionExpiresAt,
+        value: expiresAt.toUtc().toIso8601String(),
+      );
+    }
   }
 
   static Future<String?> clinicianId() => _s.read(key: _kClinicianId);
   static Future<String?> clinicianName() => _s.read(key: _kClinicianName);
   static Future<String?> token() => _s.read(key: _kSessionToken);
+  static Future<DateTime?> expiresAt() async =>
+      DateTime.tryParse(await _s.read(key: _kSessionExpiresAt) ?? '')?.toUtc();
 
-  static Future<bool> hasSession() async =>
-      (await _s.read(key: _kSessionToken))?.isNotEmpty ?? false;
+  static Future<bool> hasSession() async {
+    final present = (await _s.read(key: _kSessionToken))?.isNotEmpty ?? false;
+    final expiry = await expiresAt();
+    if (present && expiry != null && !DateTime.now().toUtc().isBefore(expiry)) {
+      await signOut();
+      return false;
+    }
+    return present;
+  }
 
   static Future<void> signOut() async => _s.deleteAll();
 }

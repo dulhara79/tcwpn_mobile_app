@@ -9,6 +9,7 @@ void main() {
   const timelineController = 'lib/state/timeline_controller.dart';
   const notesController = 'lib/state/clinical_notes_controller.dart';
   const patientsScreen = 'lib/features/patients/patients_screen.dart';
+  const patientOverview = 'lib/features/patients/patient_overview_screen.dart';
 
   test('P5B uses only verified timeline and clinical-note network routes', () {
     final source = File(p5bRepository).readAsStringSync();
@@ -46,10 +47,13 @@ void main() {
     expect(source, isNot(contains('Overall risk')));
   });
 
-  test('Patients navigation keeps canonical subject and local record identity separate', () {
-    final source = File(patientsScreen).readAsStringSync();
+  test('Patients navigation keeps canonical subject authoritative for local note scope', () {
+    final patients = File(patientsScreen).readAsStringSync();
+    final overview = File(patientOverview).readAsStringSync();
 
-    expect(source, contains('subjectId: subjectId!'));
-    expect(source, contains('localRecordId: patient.mrn'));
+    expect(patients, contains('subjectId: patient.subjectId'));
+    expect(patients, isNot(contains('localRecordId: patient.mrn')));
+    expect(overview, contains(r"'canonical-local::${_controller.subjectId}'"));
+    expect(overview, contains('localRecordId: localRecordId'));
   });
 }

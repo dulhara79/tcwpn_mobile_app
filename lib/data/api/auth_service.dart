@@ -22,11 +22,15 @@ class AuthSession {
   final String clinicianId;
   final String displayName;
   final String token;
+  final String? role;
+  final DateTime? expiresAt;
 
   const AuthSession({
     required this.clinicianId,
     required this.displayName,
     required this.token,
+    this.role,
+    this.expiresAt,
   });
 }
 
@@ -48,8 +52,8 @@ class AuthService {
   static const String _salt = Env.authSalt;
   static const String _localAccounts = Env.authLocalAccounts;
 
-  static bool get isLocalMode => _base.isEmpty;
-  static bool get supportsSelfService => !isLocalMode;
+  static bool get isLocalMode => Env.backendBase.isEmpty && _base.isEmpty;
+  static bool get supportsSelfService => _base.isNotEmpty;
   static bool get shouldWarnInsecure => isLocalMode && kReleaseMode;
 
   static ApiClient _client() => ApiClient(_base);
@@ -83,7 +87,7 @@ class AuthService {
   }) async {
     if (isLocalMode) return _local(clinicianId, password);
 
-    final api = _client();
+    final api = ApiClient(Env.backendBase.isNotEmpty ? Env.backendBase : _base);
     try {
       final json = await api.post(
         '/auth/login',
@@ -92,10 +96,16 @@ class AuthService {
       );
       final token = '${json['access_token'] ?? ''}';
       if (token.isEmpty) return null;
+      final identity = json['clinician'] is Map
+          ? Map<String, dynamic>.from(json['clinician'] as Map)
+          : json;
+      final expiresAt = DateTime.tryParse('${json['expires_at'] ?? ''}')?.toUtc();
       return AuthSession(
-        clinicianId: '${json['clinician_id'] ?? clinicianId}',
-        displayName: '${json['display_name'] ?? clinicianId}',
+        clinicianId: '${identity['clinician_id'] ?? clinicianId}',
+        displayName: '${identity['display_name'] ?? clinicianId}',
         token: token,
+        role: identity['role']?.toString(),
+        expiresAt: expiresAt,
       );
     } on ApiException catch (e) {
       // 401 is a wrong password. 403 is "verify your email" or "awaiting
@@ -219,9 +229,8 @@ class AuthService {
       sha256.convert(utf8.encode('$_salt$password')).toString();
 
   static AuthSession? _local(String id, String password) {
-    final entries = _localAccounts.isEmpty
-        ? _fallbackAccounts()
-        : _localAccounts.split(';');
+    final entries =
+        _localAccounts.isEmpty ? const <String>[] : _localAccounts.split(';');
     final wanted = digest(password);
     for (final e in entries) {
       final parts = e.split('|');
@@ -237,13 +246,4 @@ class AuthService {
     return null;
   }
 
-  /// Demo-only fallback accounts used when AUTH_LOCAL is omitted. Local mode is
-  /// visibly marked insecure in release builds and must not be used with real
-  /// participant data.
-  static List<String> _fallbackAccounts() => [
-        'DR001|Dr D. Kaushalya|${digest('clinanx-dev')}',
-        'DR002|Dr C. Suraweera|${digest('clinanx-dev')}',
-      ];
-
-  static const String devPassword = 'clinanx-dev';
 }

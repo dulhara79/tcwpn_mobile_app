@@ -10,15 +10,20 @@ class Session {
 
   static String? _token;
   static String? _clinicianId;
+  static DateTime? _expiresAt;
   static SessionSignOutHook? _beforeSignOut;
 
   static String? get token => _token;
   static String? get clinicianId => _clinicianId;
-  static bool get isActive => (_token ?? '').isNotEmpty;
+  static DateTime? get expiresAt => _expiresAt;
+  static bool get isExpired =>
+      _expiresAt != null && !DateTime.now().toUtc().isBefore(_expiresAt!);
+  static bool get isActive => (_token ?? '').isNotEmpty && !isExpired;
 
-  static void set({required String token, String? clinicianId}) {
+  static void set({required String token, String? clinicianId, DateTime? expiresAt}) {
     _token = token;
     _clinicianId = clinicianId;
+    _expiresAt = expiresAt?.toUtc();
 
     final id = clinicianId?.trim() ?? '';
     if (id.isEmpty) {
@@ -35,6 +40,7 @@ class Session {
   static void clear() {
     _token = null;
     _clinicianId = null;
+    _expiresAt = null;
     ClinicianStorageScope.clear();
   }
 

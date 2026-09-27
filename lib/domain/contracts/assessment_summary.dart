@@ -50,7 +50,9 @@ class ForecastResult {
         score: contractDouble(json['score']),
         tier: RiskTier.fromWire(json['tier']),
         escalationProbability: contractDouble(json['escalation_probability']),
-        escalationPredicted: contractBool(json['escalation_predicted']),
+        escalationPredicted: contractBool(
+          json['escalation_predicted'] ?? json['predicted'],
+        ),
         generatedAt: contractDateTime(json['generated_at']),
         validUntil: contractDateTime(json['valid_until']),
       );
