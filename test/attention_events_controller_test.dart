@@ -53,7 +53,8 @@ class _Events implements AttentionEventRepository {
       throw UnimplementedError();
 
   @override
-  Future<AttentionEvent> resolve(String eventId) => throw UnimplementedError();
+  Future<AttentionEvent> resolve(String eventId, {String? note}) =>
+      throw UnimplementedError();
 }
 
 class _Auth implements AuthRepository {

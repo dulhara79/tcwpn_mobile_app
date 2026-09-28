@@ -36,6 +36,7 @@ AttentionEvent _event(
 class _Events implements AttentionEventRepository {
   AttentionEvent event;
   Completer<AttentionEvent>? acknowledgeCompleter;
+  String? resolvedNote;
 
   _Events(this.event);
 
@@ -50,7 +51,10 @@ class _Events implements AttentionEventRepository {
   }
 
   @override
-  Future<AttentionEvent> resolve(String eventId) async => event;
+  Future<AttentionEvent> resolve(String eventId, {String? note}) async {
+    resolvedNote = note;
+    return event;
+  }
 
   @override
   Future<List<AttentionEvent>> activity({String? subjectId}) async => [event];
@@ -130,6 +134,33 @@ void main() {
     final resolve = find.widgetWithText(OutlinedButton, 'Resolve');
     await _scrollTo(tester, resolve);
     expect(resolve, findsOneWidget);
+  });
+
+  testWidgets('Resolve sends the optional note only after confirmation',
+      (tester) async {
+    final event = _event(
+      AttentionEventStatus.acknowledged,
+      acknowledgedBy: 'DR001',
+      acknowledgedAt: DateTime.utc(2026, 9, 16, 8, 2),
+    );
+    final repository = _Events(event);
+    final controller = await _controller(event, repository: repository);
+    await tester.pumpWidget(
+      MaterialApp(home: AttentionEventDetailScreen(controller: controller)),
+    );
+
+    final resolve = find.widgetWithText(OutlinedButton, 'Resolve');
+    await _scrollTo(tester, resolve);
+    await tester.tap(resolve);
+    await tester.pumpAndSettle();
+    await tester.enterText(
+      find.byType(TextField),
+      'Patient contacted; follow-up arranged.',
+    );
+    await tester.tap(find.widgetWithText(FilledButton, 'Resolve event'));
+    await tester.pumpAndSettle();
+
+    expect(repository.resolvedNote, 'Patient contacted; follow-up arranged.');
   });
 
   testWidgets('RESOLVED and UNKNOWN expose no mutation action', (tester) async {

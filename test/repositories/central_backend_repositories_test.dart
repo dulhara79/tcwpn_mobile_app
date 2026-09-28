@@ -139,13 +139,17 @@ void main() {
       client: MockClient((request) async {
         expect(request.method, 'POST');
         expect(request.url.path, '/v1/attention-events/evt-001/resolve');
-        expect(jsonDecode(request.body), <String, dynamic>{});
+        expect(jsonDecode(request.body), <String, dynamic>{
+          'note': 'Patient contacted; follow-up arranged.',
+        });
         return http.Response(jsonEncode({'event': resolved}), 200);
       }),
     );
 
-    final event =
-        await CentralBackendAttentionEventRepository(api).resolve('evt-001');
+    final event = await CentralBackendAttentionEventRepository(api).resolve(
+      'evt-001',
+      note: '  Patient contacted; follow-up arranged.  ',
+    );
     expect(event.status, AttentionEventStatus.resolved);
     expect(event.resolvedBy, 'DR001');
     expect(event.resolvedAt?.toUtc(), DateTime.utc(2026, 9, 16, 12, 31));

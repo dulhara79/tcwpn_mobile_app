@@ -59,14 +59,14 @@ class AttentionEventDetailController extends ChangeNotifier {
     await _mutate(current, () => repository.acknowledge(eventId));
   }
 
-  Future<void> resolve() async {
+  Future<void> resolve({String? note}) async {
     if (_isMutating) return;
     final current = _state.data;
     if (current == null ||
         current.status != AttentionEventStatus.acknowledged) {
       return;
     }
-    await _mutate(current, () => repository.resolve(eventId));
+    await _mutate(current, () => repository.resolve(eventId, note: note));
   }
 
   Future<void> _mutate(

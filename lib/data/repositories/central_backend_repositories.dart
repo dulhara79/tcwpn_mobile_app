@@ -244,10 +244,14 @@ class CentralBackendAttentionEventRepository
   }
 
   @override
-  Future<AttentionEvent> resolve(String eventId) async {
+  Future<AttentionEvent> resolve(String eventId, {String? note}) async {
     final id = _requireEventId(eventId);
     final path = '$_eventsPath/${Uri.encodeComponent(id)}/resolve';
-    final payload = await _api.post(path, const <String, dynamic>{});
+    final normalizedNote = note?.trim();
+    final payload = await _api.post(path, <String, dynamic>{
+      if (normalizedNote != null && normalizedNote.isNotEmpty)
+        'note': normalizedNote,
+    });
     return _parseEvent(payload, path);
   }
 

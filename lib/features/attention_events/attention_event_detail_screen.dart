@@ -75,6 +75,42 @@ class _AttentionEventDetailScreenState
     );
   }
 
+  Future<void> _resolveWithOptionalNote(BuildContext context) async {
+    final noteController = TextEditingController();
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (dialogContext) => AlertDialog(
+        title: const Text('Resolve attention event?'),
+        content: TextField(
+          controller: noteController,
+          autofocus: true,
+          maxLength: 255,
+          maxLines: 4,
+          decoration: const InputDecoration(
+            labelText: 'Resolution note (optional)',
+            hintText: 'Example: Patient contacted; follow-up arranged.',
+            border: OutlineInputBorder(),
+          ),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(dialogContext, false),
+            child: const Text('Cancel'),
+          ),
+          FilledButton(
+            onPressed: () => Navigator.pop(dialogContext, true),
+            child: const Text('Resolve event'),
+          ),
+        ],
+      ),
+    );
+    final note = noteController.text;
+    noteController.dispose();
+    if (confirmed == true) {
+      await _controller.resolve(note: note);
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
     return AnimatedBuilder(
@@ -166,7 +202,9 @@ class _AttentionEventDetailScreenState
           if (mutationAllowed &&
               event.status == AttentionEventStatus.acknowledged)
             OutlinedButton(
-              onPressed: _controller.isMutating ? null : _controller.resolve,
+              onPressed: _controller.isMutating
+                  ? null
+                  : () => _resolveWithOptionalNote(context),
               child: const Text('Resolve'),
             ),
           const SizedBox(height: Ds.s5),
@@ -238,6 +276,13 @@ class _StatusPanel extends StatelessWidget {
               'Resolved by ${event.resolvedBy}'
               '${event.resolvedAt == null ? '' : ' · ${_time(event.resolvedAt!)}'}',
               style: const TextStyle(color: Ds.inkMuted),
+            ),
+          ],
+          if ((event.resolutionNote ?? '').trim().isNotEmpty) ...[
+            const SizedBox(height: Ds.s2),
+            Text(
+              'Resolution note: ${event.resolutionNote}',
+              style: const TextStyle(color: Ds.inkMuted, height: 1.4),
             ),
           ],
         ],

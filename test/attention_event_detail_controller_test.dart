@@ -44,6 +44,7 @@ class _Events implements AttentionEventRepository {
   ApiFailure? detailFailure;
   int acknowledgeCalls = 0;
   int resolveCalls = 0;
+  String? resolvedNote;
   int detailCalls = 0;
   Completer<AttentionEvent>? acknowledgeCompleter;
 
@@ -68,8 +69,9 @@ class _Events implements AttentionEventRepository {
   }
 
   @override
-  Future<AttentionEvent> resolve(String eventId) async {
+  Future<AttentionEvent> resolve(String eventId, {String? note}) async {
     resolveCalls++;
+    resolvedNote = note;
     if (resolveFailure != null) _throw(resolveFailure!);
     return resolveResult!;
   }
@@ -133,11 +135,12 @@ void main() {
     );
 
     await controller.load();
-    await controller.resolve();
+    await controller.resolve(note: 'Follow-up arranged.');
 
     expect(controller.state.data, same(canonical));
     expect(controller.state.data!.resolvedBy, 'DR003');
     expect(repo.resolveCalls, 1);
+    expect(repo.resolvedNote, 'Follow-up arranged.');
   });
 
   test('resolved and unknown events expose no unsafe mutation', () async {

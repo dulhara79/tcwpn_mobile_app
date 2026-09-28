@@ -75,7 +75,8 @@ class _Repository implements AttentionEventRepository {
   Future<AttentionEvent> acknowledge(String eventId) => throw UnimplementedError();
 
   @override
-  Future<AttentionEvent> resolve(String eventId) => throw UnimplementedError();
+  Future<AttentionEvent> resolve(String eventId, {String? note}) =>
+      throw UnimplementedError();
 }
 
 class _Store implements AttentionNotificationStore {

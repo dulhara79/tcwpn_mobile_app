@@ -5,5 +5,5 @@ abstract interface class AttentionEventRepository {
   Future<List<AttentionEvent>> activity({String? subjectId});
   Future<AttentionEvent?> eventById(String eventId);
   Future<AttentionEvent> acknowledge(String eventId);
-  Future<AttentionEvent> resolve(String eventId);
+  Future<AttentionEvent> resolve(String eventId, {String? note});
 }

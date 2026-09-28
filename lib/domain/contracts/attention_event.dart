@@ -16,6 +16,7 @@ class AttentionEvent {
   final String? acknowledgedBy;
   final DateTime? resolvedAt;
   final String? resolvedBy;
+  final String? resolutionNote;
   final String? policyVersion;
 
   const AttentionEvent({
@@ -33,6 +34,7 @@ class AttentionEvent {
     required this.acknowledgedBy,
     required this.resolvedAt,
     required this.resolvedBy,
+    this.resolutionNote,
     required this.policyVersion,
   });
 
@@ -51,6 +53,7 @@ class AttentionEvent {
         acknowledgedBy: contractString(json['acknowledged_by']),
         resolvedAt: contractDateTime(json['resolved_at']),
         resolvedBy: contractString(json['resolved_by']),
+        resolutionNote: contractString(json['resolution_note']),
         policyVersion: contractString(json['policy_version']),
       );
 
@@ -69,6 +72,7 @@ class AttentionEvent {
         'acknowledged_by': acknowledgedBy,
         'resolved_at': resolvedAt?.toUtc().toIso8601String(),
         'resolved_by': resolvedBy,
+        'resolution_note': resolutionNote,
         'policy_version': policyVersion,
       };
 }

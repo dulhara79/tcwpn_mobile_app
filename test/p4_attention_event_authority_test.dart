@@ -23,7 +23,7 @@ void main() {
     expect(source, isNot(contains('SecureStore.clinicianId')));
     expect(source, isNot(contains('copyWith(status:')));
     expect(source, contains('repository.acknowledge(eventId)'));
-    expect(source, contains('repository.resolve(eventId)'));
+    expect(source, contains('repository.resolve(eventId, note: note)'));
     expect(source, contains('repository.eventById(eventId)'));
   });
 
