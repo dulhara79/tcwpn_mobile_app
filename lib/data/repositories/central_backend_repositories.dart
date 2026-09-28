@@ -15,7 +15,7 @@ import '../api/session.dart';
 
 class CentralBackendAuthRepository implements AuthRepository {
   CentralBackendAuthRepository([ApiClient? api])
-      : _api = api ?? ApiClient(Env.backendBase);
+    : _api = api ?? ApiClient(Env.backendBase);
 
   final ApiClient _api;
 
@@ -31,7 +31,10 @@ class CentralBackendAuthRepository implements AuthRepository {
       );
     }
     final role = principal.role?.trim().toLowerCase();
-    if (role != null && role.isNotEmpty && role != 'clinician' && role != 'doctor') {
+    if (role != null &&
+        role.isNotEmpty &&
+        role != 'clinician' &&
+        role != 'doctor') {
       throw const ApiException(
         kind: ApiFailure.forbidden,
         endpoint: '/v1/me',
@@ -45,8 +48,7 @@ class CentralBackendAuthRepository implements AuthRepository {
       throw const ApiException(
         kind: ApiFailure.forbidden,
         endpoint: '/v1/me',
-        detail:
-            'The authenticated clinician does not match the local session identity.',
+        detail: 'The authenticated clinician does not match the local session identity.',
       );
     }
 
@@ -65,15 +67,14 @@ class CentralBackendAuthRepository implements AuthRepository {
 
 class CentralBackendAssessmentRepository implements AssessmentRepository {
   CentralBackendAssessmentRepository([ApiClient? api])
-      : _api = api ?? ApiClient(Env.backendBase);
+    : _api = api ?? ApiClient(Env.backendBase);
 
   final ApiClient _api;
 
   @override
   Future<AssessmentSummary?> latestAssessment(String subjectId) async {
     final id = _requireSubjectId(subjectId);
-    final path =
-        '/v1/patients/${Uri.encodeComponent(id)}/assessment/latest';
+    final path = '/v1/patients/${Uri.encodeComponent(id)}/assessment/latest';
 
     Map<String, dynamic> payload;
     try {
@@ -86,12 +87,14 @@ class CentralBackendAssessmentRepository implements AssessmentRepository {
     final assessment = AssessmentSummary.fromJson(payload);
     final unavailable =
         assessment.assessmentStatus == AssessmentStatus.unavailable;
-    final invalidUnavailable = unavailable &&
+    final invalidUnavailable =
+        unavailable &&
         (assessment.fusionResultId != null ||
             assessment.currentAssessment.score != null ||
             assessment.currentAssessment.tier != RiskTier.unknown ||
             assessment.currentAssessment.band != null);
-    final invalidAssessment = !unavailable &&
+    final invalidAssessment =
+        !unavailable &&
         (assessment.fusionResultId == null ||
             assessment.fusionResultId! <= 0 ||
             (assessment.modelVersion ?? '').trim().isEmpty);
@@ -101,8 +104,7 @@ class CentralBackendAssessmentRepository implements AssessmentRepository {
       throw ApiException(
         kind: ApiFailure.malformed,
         endpoint: path,
-        detail:
-            'Latest assessment did not preserve the requested subject and authoritative fusion provenance.',
+        detail: 'Latest assessment did not preserve the requested subject and authoritative fusion provenance.',
       );
     }
     return assessment;
@@ -111,7 +113,7 @@ class CentralBackendAssessmentRepository implements AssessmentRepository {
 
 class CentralBackendPatientRepository implements PatientRepository {
   CentralBackendPatientRepository([ApiClient? api])
-      : _api = api ?? ApiClient(Env.backendBase);
+    : _api = api ?? ApiClient(Env.backendBase);
 
   final ApiClient _api;
 
@@ -145,8 +147,7 @@ class CentralBackendPatientRepository implements PatientRepository {
         throw const ApiException(
           kind: ApiFailure.malformed,
           endpoint: path,
-          detail:
-              'Assigned-patient roster contains a missing or duplicate subject_id.',
+          detail: 'Assigned-patient roster contains a missing or duplicate subject_id.',
         );
       }
 
@@ -167,7 +168,7 @@ class CentralBackendPatientRepository implements PatientRepository {
 
 class CentralBackendDashboardRepository implements DashboardRepository {
   CentralBackendDashboardRepository([ApiClient? api])
-      : _api = api ?? ApiClient(Env.backendBase);
+    : _api = api ?? ApiClient(Env.backendBase);
 
   final ApiClient _api;
 
@@ -175,14 +176,11 @@ class CentralBackendDashboardRepository implements DashboardRepository {
   Future<DashboardSnapshot> loadDashboard() async {
     const path = '/v1/clinicians/me/dashboard';
     final payload = await _api.get(path);
-    final snapshot = DashboardSnapshot.fromJson(
-      {
-        ...payload,
-        // Client fetch time is cache metadata only, never clinical authority.
-        'fetched_at': DateTime.timestamp().toUtc().toIso8601String(),
-      },
-      isFromCache: false,
-    );
+    final snapshot = DashboardSnapshot.fromJson({
+      ...payload,
+      // Client fetch time is cache metadata only, never clinical authority.
+      'fetched_at': DateTime.timestamp().toUtc().toIso8601String(),
+    }, isFromCache: false);
     if (snapshot.assignedCount != snapshot.assignedPatients.length) {
       throw const ApiException(
         kind: ApiFailure.malformed,
@@ -202,7 +200,7 @@ class CentralBackendDashboardRepository implements DashboardRepository {
 class CentralBackendAttentionEventRepository
     implements AttentionEventRepository {
   CentralBackendAttentionEventRepository([ApiClient? api])
-      : _api = api ?? ApiClient(Env.backendBase);
+    : _api = api ?? ApiClient(Env.backendBase);
 
   static const String _eventsPath = '/v1/attention-events';
 
@@ -303,10 +301,7 @@ class CentralBackendAttentionEventRepository
     return events;
   }
 
-  AttentionEvent _parseEvent(
-    Map<String, dynamic> payload,
-    String endpoint,
-  ) {
+  AttentionEvent _parseEvent(Map<String, dynamic> payload, String endpoint) {
     final raw = payload['event'];
     if (raw is! Map) {
       throw ApiException(

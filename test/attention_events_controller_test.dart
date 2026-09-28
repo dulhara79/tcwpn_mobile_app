@@ -8,22 +8,22 @@ import 'package:r26_ds012_app/state/async_data_state.dart';
 import 'package:r26_ds012_app/state/attention_events_controller.dart';
 
 AttentionEvent _event(String id, AttentionEventStatus status) => AttentionEvent(
-      id: id,
-      subjectId: 'subject-001',
-      fusionResultId: 123,
-      forecastResultId: 'fcst-001',
-      eventType: 'acute_escalation_forecast',
-      severity: AttentionSeverity.high,
-      reason: 'Forecast crossed policy',
-      forecastHorizon: 10,
-      status: status,
-      createdAt: DateTime.utc(2026, 9, 16, 8),
-      acknowledgedAt: null,
-      acknowledgedBy: null,
-      resolvedAt: null,
-      resolvedBy: null,
-      policyVersion: 'escalation-v1',
-    );
+  id: id,
+  subjectId: 'subject-001',
+  fusionResultId: 123,
+  forecastResultId: 'fcst-001',
+  eventType: 'acute_escalation_forecast',
+  severity: AttentionSeverity.high,
+  reason: 'Forecast crossed policy',
+  forecastHorizon: 10,
+  status: status,
+  createdAt: DateTime.utc(2026, 9, 16, 8),
+  acknowledgedAt: null,
+  acknowledgedBy: null,
+  resolvedAt: null,
+  resolvedBy: null,
+  policyVersion: 'escalation-v1',
+);
 
 class _Events implements AttentionEventRepository {
   List<AttentionEvent> value;
@@ -69,20 +69,23 @@ class _Auth implements AuthRepository {
 
 void main() {
   test('loads server event activity without reordering', () async {
-    final repo = _Events(value: [
-      _event('evt-003', AttentionEventStatus.resolved),
-      _event('evt-002', AttentionEventStatus.acknowledged),
-      _event('evt-001', AttentionEventStatus.open),
-    ]);
+    final repo = _Events(
+      value: [
+        _event('evt-003', AttentionEventStatus.resolved),
+        _event('evt-002', AttentionEventStatus.acknowledged),
+        _event('evt-001', AttentionEventStatus.open),
+      ],
+    );
     final controller = AttentionEventsController(repository: repo);
 
     await controller.load();
 
     expect(controller.state.status, AsyncDataStatus.data);
-    expect(
-      controller.state.data!.map((event) => event.id).toList(),
-      ['evt-003', 'evt-002', 'evt-001'],
-    );
+    expect(controller.state.data!.map((event) => event.id).toList(), [
+      'evt-003',
+      'evt-002',
+      'evt-001',
+    ]);
   });
 
   test('empty server activity becomes empty state', () async {
@@ -129,25 +132,28 @@ void main() {
     expect(controller.state.status, AsyncDataStatus.unavailable);
   });
 
-  test('offline and timeout remain distinguishable from server failure', () async {
-    final offline = AttentionEventsController(
-      repository: _Events(failure: ApiFailure.offline),
-    );
-    final timeout = AttentionEventsController(
-      repository: _Events(failure: ApiFailure.timeout),
-    );
-    final server = AttentionEventsController(
-      repository: _Events(failure: ApiFailure.server),
-    );
+  test(
+    'offline and timeout remain distinguishable from server failure',
+    () async {
+      final offline = AttentionEventsController(
+        repository: _Events(failure: ApiFailure.offline),
+      );
+      final timeout = AttentionEventsController(
+        repository: _Events(failure: ApiFailure.timeout),
+      );
+      final server = AttentionEventsController(
+        repository: _Events(failure: ApiFailure.server),
+      );
 
-    await offline.load();
-    await timeout.load();
-    await server.load();
+      await offline.load();
+      await timeout.load();
+      await server.load();
 
-    expect(offline.state.status, AsyncDataStatus.offline);
-    expect(timeout.state.status, AsyncDataStatus.unavailable);
-    expect(server.state.status, AsyncDataStatus.error);
-  });
+      expect(offline.state.status, AsyncDataStatus.offline);
+      expect(timeout.state.status, AsyncDataStatus.unavailable);
+      expect(server.state.status, AsyncDataStatus.error);
+    },
+  );
 
   test('subject-scoped load forwards only the canonical subject id', () async {
     final repo = _Events();

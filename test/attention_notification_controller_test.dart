@@ -8,22 +8,25 @@ import 'package:r26_ds012_app/domain/repositories/attention_event_repository.dar
 import 'package:r26_ds012_app/state/attention_notification_controller.dart';
 
 void main() {
-  test('new OPEN event produces one notification and is marked delivered', () async {
-    final repository = _Repository([_event('evt-1')]);
-    final store = _Store();
-    final gateway = _Gateway();
-    final controller = AttentionNotificationController(
-      repository: repository,
-      store: store,
-      gateway: gateway,
-    );
+  test(
+    'new OPEN event produces one notification and is marked delivered',
+    () async {
+      final repository = _Repository([_event('evt-1')]);
+      final store = _Store();
+      final gateway = _Gateway();
+      final controller = AttentionNotificationController(
+        repository: repository,
+        store: store,
+        gateway: gateway,
+      );
 
-    await controller.pollOnce();
-    await controller.pollOnce();
+      await controller.pollOnce();
+      await controller.pollOnce();
 
-    expect(gateway.shown, ['evt-1']);
-    expect(store.delivered, {'evt-1'});
-  });
+      expect(gateway.shown, ['evt-1']);
+      expect(store.delivered, {'evt-1'});
+    },
+  );
 
   test('different event ids each produce one notification', () async {
     final gateway = _Gateway();
@@ -70,45 +73,47 @@ void main() {
     expect(controller.lastApiFailure, ApiFailure.offline);
   });
 
-  test('failed OS delivery is not marked delivered so a later poll can retry', () async {
-    final store = _Store();
-    final gateway = _Gateway(failuresRemaining: 1);
-    final controller = AttentionNotificationController(
-      repository: _Repository([_event('evt-1')]),
-      store: store,
-      gateway: gateway,
-    );
+  test(
+    'failed OS delivery is not marked delivered so a later poll can retry',
+    () async {
+      final store = _Store();
+      final gateway = _Gateway(failuresRemaining: 1);
+      final controller = AttentionNotificationController(
+        repository: _Repository([_event('evt-1')]),
+        store: store,
+        gateway: gateway,
+      );
 
-    await controller.pollOnce();
-    expect(store.delivered, isEmpty);
+      await controller.pollOnce();
+      expect(store.delivered, isEmpty);
 
-    await controller.pollOnce();
-    expect(gateway.shown, ['evt-1']);
-    expect(store.delivered, {'evt-1'});
-  });
+      await controller.pollOnce();
+      expect(gateway.shown, ['evt-1']);
+      expect(store.delivered, {'evt-1'});
+    },
+  );
 }
 
 AttentionEvent _event(
   String id, {
   AttentionEventStatus status = AttentionEventStatus.open,
-}) =>
-    AttentionEvent(
-      id: id,
-      subjectId: 'subject-1',
-      fusionResultId: 7,
-      forecastResultId: 'forecast-1',
-      eventType: 'acute_escalation_forecast',
-      severity: AttentionSeverity.high,
-      reason: null,
-      forecastHorizon: 10,
-      status: status,
-      createdAt: DateTime.utc(2026, 9, 16),
-      acknowledgedAt: null,
-      acknowledgedBy: null,
-      resolvedAt: null,
-      resolvedBy: null,
-      policyVersion: 'policy-v1',
-    );
+}) => AttentionEvent(
+  id: id,
+  subjectId: 'subject-1',
+  fusionResultId: 7,
+  forecastResultId: 'forecast-1',
+  eventType: 'acute_escalation_forecast',
+  severity: AttentionSeverity.high,
+  reason: null,
+  forecastHorizon: 10,
+  status: status,
+  createdAt: DateTime.utc(2026, 9, 16),
+  acknowledgedAt: null,
+  acknowledgedBy: null,
+  resolvedAt: null,
+  resolvedBy: null,
+  policyVersion: 'policy-v1',
+);
 
 class _Repository implements AttentionEventRepository {
   _Repository(this.events) : failure = null;
@@ -135,7 +140,8 @@ class _Repository implements AttentionEventRepository {
   }
 
   @override
-  Future<AttentionEvent> acknowledge(String eventId) => throw UnimplementedError();
+  Future<AttentionEvent> acknowledge(String eventId) =>
+      throw UnimplementedError();
 
   @override
   Future<AttentionEvent> resolve(String eventId, {String? note}) =>
@@ -150,7 +156,8 @@ class _Store implements AttentionNotificationStore {
   Future<void> markDelivered(String eventId) async => delivered.add(eventId);
 
   @override
-  Future<bool> wasDelivered(String eventId) async => delivered.contains(eventId);
+  Future<bool> wasDelivered(String eventId) async =>
+      delivered.contains(eventId);
 
   @override
   Future<void> savePendingOpen(String eventId) async => pending = eventId;

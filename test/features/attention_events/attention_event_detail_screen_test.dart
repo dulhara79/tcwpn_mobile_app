@@ -14,24 +14,23 @@ AttentionEvent _event(
   DateTime? acknowledgedAt,
   String? resolvedBy,
   DateTime? resolvedAt,
-}) =>
-    AttentionEvent(
-      id: 'evt-001',
-      subjectId: 'subject-001',
-      fusionResultId: 123,
-      forecastResultId: 'fcst-001',
-      eventType: 'acute_escalation_forecast',
-      severity: AttentionSeverity.high,
-      reason: 'Forecast crossed versioned escalation policy',
-      forecastHorizon: 10,
-      status: status,
-      createdAt: DateTime.utc(2026, 9, 16, 8),
-      acknowledgedAt: acknowledgedAt,
-      acknowledgedBy: acknowledgedBy,
-      resolvedAt: resolvedAt,
-      resolvedBy: resolvedBy,
-      policyVersion: 'escalation-v1',
-    );
+}) => AttentionEvent(
+  id: 'evt-001',
+  subjectId: 'subject-001',
+  fusionResultId: 123,
+  forecastResultId: 'fcst-001',
+  eventType: 'acute_escalation_forecast',
+  severity: AttentionSeverity.high,
+  reason: 'Forecast crossed versioned escalation policy',
+  forecastHorizon: 10,
+  status: status,
+  createdAt: DateTime.utc(2026, 9, 16, 8),
+  acknowledgedAt: acknowledgedAt,
+  acknowledgedBy: acknowledgedBy,
+  resolvedAt: resolvedAt,
+  resolvedBy: resolvedBy,
+  policyVersion: 'escalation-v1',
+);
 
 class _Events implements AttentionEventRepository {
   AttentionEvent event;
@@ -86,8 +85,9 @@ Future<void> _scrollTo(WidgetTester tester, Finder target) async {
 }
 
 void main() {
-  testWidgets('detail shows canonical server identity and provenance',
-      (tester) async {
+  testWidgets('detail shows canonical server identity and provenance', (
+    tester,
+  ) async {
     final controller = await _controller(_event(AttentionEventStatus.open));
 
     await tester.pumpWidget(
@@ -116,28 +116,31 @@ void main() {
     expect(acknowledge, findsOneWidget);
   });
 
-  testWidgets('ACKNOWLEDGED shows Resolve and server acknowledgement provenance',
-      (tester) async {
-    final controller = await _controller(
-      _event(
-        AttentionEventStatus.acknowledged,
-        acknowledgedBy: 'DR001',
-        acknowledgedAt: DateTime.utc(2026, 9, 16, 8, 2),
-      ),
-    );
-    await tester.pumpWidget(
-      MaterialApp(home: AttentionEventDetailScreen(controller: controller)),
-    );
+  testWidgets(
+    'ACKNOWLEDGED shows Resolve and server acknowledgement provenance',
+    (tester) async {
+      final controller = await _controller(
+        _event(
+          AttentionEventStatus.acknowledged,
+          acknowledgedBy: 'DR001',
+          acknowledgedAt: DateTime.utc(2026, 9, 16, 8, 2),
+        ),
+      );
+      await tester.pumpWidget(
+        MaterialApp(home: AttentionEventDetailScreen(controller: controller)),
+      );
 
-    expect(find.textContaining('DR001'), findsOneWidget);
-    expect(find.widgetWithText(OutlinedButton, 'Acknowledge'), findsNothing);
-    final resolve = find.widgetWithText(OutlinedButton, 'Resolve');
-    await _scrollTo(tester, resolve);
-    expect(resolve, findsOneWidget);
-  });
+      expect(find.textContaining('DR001'), findsOneWidget);
+      expect(find.widgetWithText(OutlinedButton, 'Acknowledge'), findsNothing);
+      final resolve = find.widgetWithText(OutlinedButton, 'Resolve');
+      await _scrollTo(tester, resolve);
+      expect(resolve, findsOneWidget);
+    },
+  );
 
-  testWidgets('Resolve sends the optional note only after confirmation',
-      (tester) async {
+  testWidgets('Resolve sends the optional note only after confirmation', (
+    tester,
+  ) async {
     final event = _event(
       AttentionEventStatus.acknowledged,
       acknowledgedBy: 'DR001',
@@ -171,7 +174,9 @@ void main() {
       final controller = await _controller(
         _event(
           status,
-          acknowledgedBy: status == AttentionEventStatus.resolved ? 'DR001' : null,
+          acknowledgedBy: status == AttentionEventStatus.resolved
+              ? 'DR001'
+              : null,
           acknowledgedAt: status == AttentionEventStatus.resolved
               ? DateTime.utc(2026, 9, 16, 8, 2)
               : null,
@@ -192,8 +197,9 @@ void main() {
     }
   });
 
-  testWidgets('mutation action disables while server request is in flight',
-      (tester) async {
+  testWidgets('mutation action disables while server request is in flight', (
+    tester,
+  ) async {
     final event = _event(AttentionEventStatus.open);
     final repository = _Events(event)
       ..acknowledgeCompleter = Completer<AttentionEvent>();

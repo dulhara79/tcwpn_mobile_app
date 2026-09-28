@@ -8,26 +8,26 @@ import 'package:r26_ds012_app/features/attention_events/activity_screen.dart';
 import 'package:r26_ds012_app/state/attention_events_controller.dart';
 
 AttentionEvent _event(String id, AttentionEventStatus status) => AttentionEvent(
-      id: id,
-      subjectId: 'subject-$id',
-      fusionResultId: 123,
-      forecastResultId: 'fcst-$id',
-      eventType: 'acute_escalation_forecast',
-      severity: AttentionSeverity.high,
-      reason: 'Forecast crossed policy for $id',
-      forecastHorizon: 10,
-      status: status,
-      createdAt: DateTime.utc(2026, 9, 16, 8),
-      acknowledgedAt: status == AttentionEventStatus.open
-          ? null
-          : DateTime.utc(2026, 9, 16, 8, 2),
-      acknowledgedBy: status == AttentionEventStatus.open ? null : 'DR001',
-      resolvedAt: status == AttentionEventStatus.resolved
-          ? DateTime.utc(2026, 9, 16, 8, 8)
-          : null,
-      resolvedBy: status == AttentionEventStatus.resolved ? 'DR002' : null,
-      policyVersion: 'escalation-v1',
-    );
+  id: id,
+  subjectId: 'subject-$id',
+  fusionResultId: 123,
+  forecastResultId: 'fcst-$id',
+  eventType: 'acute_escalation_forecast',
+  severity: AttentionSeverity.high,
+  reason: 'Forecast crossed policy for $id',
+  forecastHorizon: 10,
+  status: status,
+  createdAt: DateTime.utc(2026, 9, 16, 8),
+  acknowledgedAt: status == AttentionEventStatus.open
+      ? null
+      : DateTime.utc(2026, 9, 16, 8, 2),
+  acknowledgedBy: status == AttentionEventStatus.open ? null : 'DR001',
+  resolvedAt: status == AttentionEventStatus.resolved
+      ? DateTime.utc(2026, 9, 16, 8, 8)
+      : null,
+  resolvedBy: status == AttentionEventStatus.resolved ? 'DR002' : null,
+  policyVersion: 'escalation-v1',
+);
 
 class _Events implements AttentionEventRepository {
   final List<AttentionEvent> events;
@@ -69,8 +69,9 @@ Future<AttentionEventsController> _controller(
 }
 
 void main() {
-  testWidgets('groups OPEN ACKNOWLEDGED RESOLVED and UNKNOWN server events',
-      (tester) async {
+  testWidgets('groups OPEN ACKNOWLEDGED RESOLVED and UNKNOWN server events', (
+    tester,
+  ) async {
     final controller = await _controller([
       _event('open-1', AttentionEventStatus.open),
       _event('ack-1', AttentionEventStatus.acknowledged),
@@ -97,7 +98,9 @@ void main() {
     expect(find.text('unknown-1'), findsOneWidget);
   });
 
-  testWidgets('preserves server order within an activity group', (tester) async {
+  testWidgets('preserves server order within an activity group', (
+    tester,
+  ) async {
     final controller = await _controller([
       _event('open-3', AttentionEventStatus.open),
       _event('open-2', AttentionEventStatus.open),
@@ -115,7 +118,9 @@ void main() {
     expect(y2, lessThan(y1));
   });
 
-  testWidgets('opens detail with the same server event identity', (tester) async {
+  testWidgets('opens detail with the same server event identity', (
+    tester,
+  ) async {
     final event = _event('evt-001', AttentionEventStatus.open);
     final controller = await _controller([event]);
     AttentionEvent? opened;
@@ -136,29 +141,35 @@ void main() {
     expect(opened!.id, 'evt-001');
   });
 
-  testWidgets('notConfigured is unavailable and never falls back to legacy alerts',
-      (tester) async {
-    final controller = await _controller(
-      const [],
-      failure: ApiFailure.notConfigured,
-    );
+  testWidgets(
+    'notConfigured is unavailable and never falls back to legacy alerts',
+    (tester) async {
+      final controller = await _controller(
+        const [],
+        failure: ApiFailure.notConfigured,
+      );
 
-    await tester.pumpWidget(
-      MaterialApp(home: ActivityScreen(controller: controller)),
-    );
+      await tester.pumpWidget(
+        MaterialApp(home: ActivityScreen(controller: controller)),
+      );
 
-    expect(find.textContaining('Activity unavailable'), findsOneWidget);
-    expect(find.textContaining('RED or DARK RED band'), findsNothing);
-  });
+      expect(find.textContaining('Activity unavailable'), findsOneWidget);
+      expect(find.textContaining('RED or DARK RED band'), findsNothing);
+    },
+  );
 
-  testWidgets('empty activity is explicit server event history state',
-      (tester) async {
+  testWidgets('empty activity is explicit server event history state', (
+    tester,
+  ) async {
     final controller = await _controller(const []);
 
     await tester.pumpWidget(
       MaterialApp(home: ActivityScreen(controller: controller)),
     );
 
-    expect(find.textContaining('No server attention-event activity'), findsOneWidget);
+    expect(
+      find.textContaining('No server attention-event activity'),
+      findsOneWidget,
+    );
   });
 }

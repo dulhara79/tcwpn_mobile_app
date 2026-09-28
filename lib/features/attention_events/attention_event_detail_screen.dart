@@ -42,7 +42,8 @@ class _AttentionEventDetailScreenState
   void initState() {
     super.initState();
     _ownsController = widget.controller == null;
-    _controller = widget.controller ??
+    _controller =
+        widget.controller ??
         AttentionEventDetailController(
           eventId: widget.eventId!,
           repository: CentralBackendAttentionEventRepository(),
@@ -125,10 +126,7 @@ class _AttentionEventDetailScreenState
     );
   }
 
-  Widget _body(
-    BuildContext context,
-    AsyncDataState<AttentionEvent> state,
-  ) {
+  Widget _body(BuildContext context, AsyncDataState<AttentionEvent> state) {
     if (state.status == AsyncDataStatus.loading) {
       return const Center(child: CircularProgressIndicator());
     }
@@ -147,16 +145,20 @@ class _AttentionEventDetailScreenState
             ? Icons.cloud_off_rounded
             : Icons.notification_important_outlined,
         title: title,
-        body: state.message ??
+        body:
+            state.message ??
             'The authoritative server attention event could not be loaded.',
-        actionLabel: state.status == AsyncDataStatus.sessionExpired ? null : 'Retry',
+        actionLabel: state.status == AsyncDataStatus.sessionExpired
+            ? null
+            : 'Retry',
         onAction: state.status == AsyncDataStatus.sessionExpired
             ? null
             : () => _controller.load(),
       );
     }
 
-    final mutationAllowed = state.status == AsyncDataStatus.data ||
+    final mutationAllowed =
+        state.status == AsyncDataStatus.data ||
         state.status == AsyncDataStatus.partial;
 
     return RefreshIndicator(
@@ -172,8 +174,7 @@ class _AttentionEventDetailScreenState
               icon: state.status == AsyncDataStatus.offline
                   ? Icons.cloud_off_rounded
                   : Icons.info_outline_rounded,
-              text: state.message ??
-                  'The last canonical server event state is shown. No local lifecycle transition was created.',
+              text: state.message ?? 'The last canonical server event state is shown. No local lifecycle transition was created.',
             ),
             const SizedBox(height: Ds.s4),
           ],
@@ -196,7 +197,9 @@ class _AttentionEventDetailScreenState
           const SizedBox(height: Ds.s3),
           if (mutationAllowed && event.status == AttentionEventStatus.open)
             OutlinedButton(
-              onPressed: _controller.isMutating ? null : _controller.acknowledge,
+              onPressed: _controller.isMutating
+                  ? null
+                  : _controller.acknowledge,
               child: const Text('Acknowledge'),
             ),
           if (mutationAllowed &&
@@ -229,10 +232,7 @@ class _StatusPanel extends StatelessWidget {
           Row(
             children: [
               Expanded(
-                child: Text(
-                  event.id,
-                  style: AppTheme.display(size: 18),
-                ),
+                child: Text(event.id, style: AppTheme.display(size: 18)),
               ),
               Text(
                 _statusLabel(event.status),
@@ -358,11 +358,11 @@ class _Field extends StatelessWidget {
 }
 
 String _statusLabel(AttentionEventStatus status) => switch (status) {
-      AttentionEventStatus.open => 'OPEN',
-      AttentionEventStatus.acknowledged => 'ACKNOWLEDGED',
-      AttentionEventStatus.resolved => 'RESOLVED',
-      AttentionEventStatus.unknown => 'UNKNOWN',
-    };
+  AttentionEventStatus.open => 'OPEN',
+  AttentionEventStatus.acknowledged => 'ACKNOWLEDGED',
+  AttentionEventStatus.resolved => 'RESOLVED',
+  AttentionEventStatus.unknown => 'UNKNOWN',
+};
 
 String _time(DateTime value) =>
     DateFormat('d MMM y, HH:mm').format(value.toLocal());
