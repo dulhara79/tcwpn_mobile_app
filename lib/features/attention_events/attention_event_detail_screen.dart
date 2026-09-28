@@ -77,13 +77,13 @@ class _AttentionEventDetailScreenState
   }
 
   Future<void> _resolveWithOptionalNote(BuildContext context) async {
-    final noteController = TextEditingController();
+    var note = '';
     final confirmed = await showDialog<bool>(
       context: context,
       builder: (dialogContext) => AlertDialog(
         title: const Text('Resolve attention event?'),
         content: TextField(
-          controller: noteController,
+          onChanged: (value) => note = value,
           autofocus: true,
           maxLength: 255,
           maxLines: 4,
@@ -105,8 +105,6 @@ class _AttentionEventDetailScreenState
         ],
       ),
     );
-    final note = noteController.text;
-    noteController.dispose();
     if (confirmed == true) {
       await _controller.resolve(note: note);
     }
@@ -174,7 +172,9 @@ class _AttentionEventDetailScreenState
               icon: state.status == AsyncDataStatus.offline
                   ? Icons.cloud_off_rounded
                   : Icons.info_outline_rounded,
-              text: state.message ?? 'The last canonical server event state is shown. No local lifecycle transition was created.',
+              text:
+                  state.message ??
+                  'The last canonical server event state is shown. No local lifecycle transition was created.',
             ),
             const SizedBox(height: Ds.s4),
           ],
