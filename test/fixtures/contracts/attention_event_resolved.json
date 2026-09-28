@@ -13,5 +13,6 @@
   "acknowledged_by": "DR001",
   "resolved_at": "2026-09-15T10:15:00Z",
   "resolved_by": "DR001",
+  "resolution_note": "Patient contacted.",
   "policy_version": "escalation-v1"
 }

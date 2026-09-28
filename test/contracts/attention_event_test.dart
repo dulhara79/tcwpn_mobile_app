@@ -34,5 +34,6 @@ void main() {
     expect(event.forecastResultId, 'fcst-001');
     expect(event.status, AttentionEventStatus.resolved);
     expect(event.resolvedBy, 'DR001');
+    expect(event.resolutionNote, 'Patient contacted.');
   });
 }

@@ -42,7 +42,8 @@ class _AttentionEventDetailScreenState
   void initState() {
     super.initState();
     _ownsController = widget.controller == null;
-    _controller = widget.controller ??
+    _controller =
+        widget.controller ??
         AttentionEventDetailController(
           eventId: widget.eventId!,
           repository: CentralBackendAttentionEventRepository(),
@@ -75,6 +76,40 @@ class _AttentionEventDetailScreenState
     );
   }
 
+  Future<void> _resolveWithOptionalNote(BuildContext context) async {
+    var note = '';
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (dialogContext) => AlertDialog(
+        title: const Text('Resolve attention event?'),
+        content: TextField(
+          onChanged: (value) => note = value,
+          autofocus: true,
+          maxLength: 255,
+          maxLines: 4,
+          decoration: const InputDecoration(
+            labelText: 'Resolution note (optional)',
+            hintText: 'Example: Patient contacted; follow-up arranged.',
+            border: OutlineInputBorder(),
+          ),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(dialogContext, false),
+            child: const Text('Cancel'),
+          ),
+          FilledButton(
+            onPressed: () => Navigator.pop(dialogContext, true),
+            child: const Text('Resolve event'),
+          ),
+        ],
+      ),
+    );
+    if (confirmed == true) {
+      await _controller.resolve(note: note);
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
     return AnimatedBuilder(
@@ -89,10 +124,7 @@ class _AttentionEventDetailScreenState
     );
   }
 
-  Widget _body(
-    BuildContext context,
-    AsyncDataState<AttentionEvent> state,
-  ) {
+  Widget _body(BuildContext context, AsyncDataState<AttentionEvent> state) {
     if (state.status == AsyncDataStatus.loading) {
       return const Center(child: CircularProgressIndicator());
     }
@@ -111,16 +143,20 @@ class _AttentionEventDetailScreenState
             ? Icons.cloud_off_rounded
             : Icons.notification_important_outlined,
         title: title,
-        body: state.message ??
+        body:
+            state.message ??
             'The authoritative server attention event could not be loaded.',
-        actionLabel: state.status == AsyncDataStatus.sessionExpired ? null : 'Retry',
+        actionLabel: state.status == AsyncDataStatus.sessionExpired
+            ? null
+            : 'Retry',
         onAction: state.status == AsyncDataStatus.sessionExpired
             ? null
             : () => _controller.load(),
       );
     }
 
-    final mutationAllowed = state.status == AsyncDataStatus.data ||
+    final mutationAllowed =
+        state.status == AsyncDataStatus.data ||
         state.status == AsyncDataStatus.partial;
 
     return RefreshIndicator(
@@ -136,7 +172,8 @@ class _AttentionEventDetailScreenState
               icon: state.status == AsyncDataStatus.offline
                   ? Icons.cloud_off_rounded
                   : Icons.info_outline_rounded,
-              text: state.message ??
+              text:
+                  state.message ??
                   'The last canonical server event state is shown. No local lifecycle transition was created.',
             ),
             const SizedBox(height: Ds.s4),
@@ -160,13 +197,17 @@ class _AttentionEventDetailScreenState
           const SizedBox(height: Ds.s3),
           if (mutationAllowed && event.status == AttentionEventStatus.open)
             OutlinedButton(
-              onPressed: _controller.isMutating ? null : _controller.acknowledge,
+              onPressed: _controller.isMutating
+                  ? null
+                  : _controller.acknowledge,
               child: const Text('Acknowledge'),
             ),
           if (mutationAllowed &&
               event.status == AttentionEventStatus.acknowledged)
             OutlinedButton(
-              onPressed: _controller.isMutating ? null : _controller.resolve,
+              onPressed: _controller.isMutating
+                  ? null
+                  : () => _resolveWithOptionalNote(context),
               child: const Text('Resolve'),
             ),
           const SizedBox(height: Ds.s5),
@@ -191,10 +232,7 @@ class _StatusPanel extends StatelessWidget {
           Row(
             children: [
               Expanded(
-                child: Text(
-                  event.id,
-                  style: AppTheme.display(size: 18),
-                ),
+                child: Text(event.id, style: AppTheme.display(size: 18)),
               ),
               Text(
                 _statusLabel(event.status),
@@ -238,6 +276,13 @@ class _StatusPanel extends StatelessWidget {
               'Resolved by ${event.resolvedBy}'
               '${event.resolvedAt == null ? '' : ' · ${_time(event.resolvedAt!)}'}',
               style: const TextStyle(color: Ds.inkMuted),
+            ),
+          ],
+          if ((event.resolutionNote ?? '').trim().isNotEmpty) ...[
+            const SizedBox(height: Ds.s2),
+            Text(
+              'Resolution note: ${event.resolutionNote}',
+              style: const TextStyle(color: Ds.inkMuted, height: 1.4),
             ),
           ],
         ],
@@ -313,11 +358,11 @@ class _Field extends StatelessWidget {
 }
 
 String _statusLabel(AttentionEventStatus status) => switch (status) {
-      AttentionEventStatus.open => 'OPEN',
-      AttentionEventStatus.acknowledged => 'ACKNOWLEDGED',
-      AttentionEventStatus.resolved => 'RESOLVED',
-      AttentionEventStatus.unknown => 'UNKNOWN',
-    };
+  AttentionEventStatus.open => 'OPEN',
+  AttentionEventStatus.acknowledged => 'ACKNOWLEDGED',
+  AttentionEventStatus.resolved => 'RESOLVED',
+  AttentionEventStatus.unknown => 'UNKNOWN',
+};
 
 String _time(DateTime value) =>
     DateFormat('d MMM y, HH:mm').format(value.toLocal());

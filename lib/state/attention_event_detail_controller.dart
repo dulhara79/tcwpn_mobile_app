@@ -38,7 +38,8 @@ class AttentionEventDetailController extends ChangeNotifier {
       final event = await repository.eventById(eventId);
       _state = event == null
           ? const AsyncDataState<AttentionEvent>.unavailable(
-              message: 'This attention event is no longer available on the server.',
+              message:
+                  'This attention event is no longer available on the server.',
             )
           : AsyncDataState<AttentionEvent>.data(event);
     } on ApiException catch (e) {
@@ -59,14 +60,14 @@ class AttentionEventDetailController extends ChangeNotifier {
     await _mutate(current, () => repository.acknowledge(eventId));
   }
 
-  Future<void> resolve() async {
+  Future<void> resolve({String? note}) async {
     if (_isMutating) return;
     final current = _state.data;
     if (current == null ||
         current.status != AttentionEventStatus.acknowledged) {
       return;
     }
-    await _mutate(current, () => repository.resolve(eventId));
+    await _mutate(current, () => repository.resolve(eventId, note: note));
   }
 
   Future<void> _mutate(
@@ -103,21 +104,19 @@ class AttentionEventDetailController extends ChangeNotifier {
       final canonical = await repository.eventById(eventId);
       _state = canonical == null
           ? const AsyncDataState<AttentionEvent>.unavailable(
-              message: 'This attention event is no longer available on the server.',
+              message:
+                  'This attention event is no longer available on the server.',
             )
           : AsyncDataState<AttentionEvent>.data(canonical);
-      _mutationMessage =
-          'This event changed on the server. The current server state is shown.';
+      _mutationMessage = 'This event changed on the server. The current server state is shown.';
     } on ApiException catch (e) {
       await _handleLoadFailure(e);
-      _mutationMessage =
-          'This event changed on the server, but the current server state could not be refreshed.';
+      _mutationMessage = 'This event changed on the server, but the current server state could not be refreshed.';
     } catch (_) {
       _state = const AsyncDataState<AttentionEvent>.error(
         message: 'The current server event state could not be refreshed.',
       );
-      _mutationMessage =
-          'This event changed on the server, but the current server state could not be refreshed.';
+      _mutationMessage = 'This event changed on the server, but the current server state could not be refreshed.';
     }
   }
 
@@ -185,7 +184,6 @@ class AttentionEventDetailController extends ChangeNotifier {
       case ApiFailure.conflict:
         break;
     }
-    _mutationMessage =
-        'The action was not confirmed by the server. The last canonical event state is still shown.';
+    _mutationMessage = 'The action was not confirmed by the server. The last canonical event state is still shown.';
   }
 }

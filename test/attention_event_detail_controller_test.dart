@@ -16,24 +16,23 @@ AttentionEvent _event(
   DateTime? acknowledgedAt,
   String? resolvedBy,
   DateTime? resolvedAt,
-}) =>
-    AttentionEvent(
-      id: id,
-      subjectId: 'subject-001',
-      fusionResultId: 123,
-      forecastResultId: 'fcst-001',
-      eventType: 'acute_escalation_forecast',
-      severity: AttentionSeverity.high,
-      reason: 'Forecast crossed policy',
-      forecastHorizon: 10,
-      status: status,
-      createdAt: DateTime.utc(2026, 9, 16, 8),
-      acknowledgedAt: acknowledgedAt,
-      acknowledgedBy: acknowledgedBy,
-      resolvedAt: resolvedAt,
-      resolvedBy: resolvedBy,
-      policyVersion: 'escalation-v1',
-    );
+}) => AttentionEvent(
+  id: id,
+  subjectId: 'subject-001',
+  fusionResultId: 123,
+  forecastResultId: 'fcst-001',
+  eventType: 'acute_escalation_forecast',
+  severity: AttentionSeverity.high,
+  reason: 'Forecast crossed policy',
+  forecastHorizon: 10,
+  status: status,
+  createdAt: DateTime.utc(2026, 9, 16, 8),
+  acknowledgedAt: acknowledgedAt,
+  acknowledgedBy: acknowledgedBy,
+  resolvedAt: resolvedAt,
+  resolvedBy: resolvedBy,
+  policyVersion: 'escalation-v1',
+);
 
 class _Events implements AttentionEventRepository {
   AttentionEvent? detail;
@@ -44,6 +43,7 @@ class _Events implements AttentionEventRepository {
   ApiFailure? detailFailure;
   int acknowledgeCalls = 0;
   int resolveCalls = 0;
+  String? resolvedNote;
   int detailCalls = 0;
   Completer<AttentionEvent>? acknowledgeCompleter;
 
@@ -68,8 +68,9 @@ class _Events implements AttentionEventRepository {
   }
 
   @override
-  Future<AttentionEvent> resolve(String eventId) async {
+  Future<AttentionEvent> resolve(String eventId, {String? note}) async {
     resolveCalls++;
+    resolvedNote = note;
     if (resolveFailure != null) _throw(resolveFailure!);
     return resolveResult!;
   }
@@ -92,53 +93,60 @@ class _Auth implements AuthRepository {
 }
 
 void main() {
-  test('OPEN acknowledge replaces state with canonical server response', () async {
-    final open = _event(AttentionEventStatus.open);
-    final canonical = _event(
-      AttentionEventStatus.acknowledged,
-      acknowledgedBy: 'DR002',
-      acknowledgedAt: DateTime.utc(2026, 9, 16, 8, 2),
-    );
-    final repo = _Events(detail: open)..acknowledgeResult = canonical;
-    final controller = AttentionEventDetailController(
-      eventId: 'evt-001',
-      repository: repo,
-    );
+  test(
+    'OPEN acknowledge replaces state with canonical server response',
+    () async {
+      final open = _event(AttentionEventStatus.open);
+      final canonical = _event(
+        AttentionEventStatus.acknowledged,
+        acknowledgedBy: 'DR002',
+        acknowledgedAt: DateTime.utc(2026, 9, 16, 8, 2),
+      );
+      final repo = _Events(detail: open)..acknowledgeResult = canonical;
+      final controller = AttentionEventDetailController(
+        eventId: 'evt-001',
+        repository: repo,
+      );
 
-    await controller.load();
-    await controller.acknowledge();
+      await controller.load();
+      await controller.acknowledge();
 
-    expect(controller.state.data, same(canonical));
-    expect(controller.state.data!.acknowledgedBy, 'DR002');
-    expect(repo.acknowledgeCalls, 1);
-  });
+      expect(controller.state.data, same(canonical));
+      expect(controller.state.data!.acknowledgedBy, 'DR002');
+      expect(repo.acknowledgeCalls, 1);
+    },
+  );
 
-  test('ACKNOWLEDGED resolve replaces state with canonical server response', () async {
-    final acknowledged = _event(
-      AttentionEventStatus.acknowledged,
-      acknowledgedBy: 'DR001',
-      acknowledgedAt: DateTime.utc(2026, 9, 16, 8, 2),
-    );
-    final canonical = _event(
-      AttentionEventStatus.resolved,
-      acknowledgedBy: 'DR001',
-      acknowledgedAt: DateTime.utc(2026, 9, 16, 8, 2),
-      resolvedBy: 'DR003',
-      resolvedAt: DateTime.utc(2026, 9, 16, 8, 8),
-    );
-    final repo = _Events(detail: acknowledged)..resolveResult = canonical;
-    final controller = AttentionEventDetailController(
-      eventId: 'evt-001',
-      repository: repo,
-    );
+  test(
+    'ACKNOWLEDGED resolve replaces state with canonical server response',
+    () async {
+      final acknowledged = _event(
+        AttentionEventStatus.acknowledged,
+        acknowledgedBy: 'DR001',
+        acknowledgedAt: DateTime.utc(2026, 9, 16, 8, 2),
+      );
+      final canonical = _event(
+        AttentionEventStatus.resolved,
+        acknowledgedBy: 'DR001',
+        acknowledgedAt: DateTime.utc(2026, 9, 16, 8, 2),
+        resolvedBy: 'DR003',
+        resolvedAt: DateTime.utc(2026, 9, 16, 8, 8),
+      );
+      final repo = _Events(detail: acknowledged)..resolveResult = canonical;
+      final controller = AttentionEventDetailController(
+        eventId: 'evt-001',
+        repository: repo,
+      );
 
-    await controller.load();
-    await controller.resolve();
+      await controller.load();
+      await controller.resolve(note: 'Follow-up arranged.');
 
-    expect(controller.state.data, same(canonical));
-    expect(controller.state.data!.resolvedBy, 'DR003');
-    expect(repo.resolveCalls, 1);
-  });
+      expect(controller.state.data, same(canonical));
+      expect(controller.state.data!.resolvedBy, 'DR003');
+      expect(repo.resolveCalls, 1);
+      expect(repo.resolvedNote, 'Follow-up arranged.');
+    },
+  );
 
   test('resolved and unknown events expose no unsafe mutation', () async {
     final resolvedRepo = _Events(detail: _event(AttentionEventStatus.resolved));
@@ -165,32 +173,35 @@ void main() {
     expect(unknownRepo.resolveCalls, 0);
   });
 
-  test('duplicate acknowledge tap sends one mutation while in flight', () async {
-    final repo = _Events(detail: _event(AttentionEventStatus.open))
-      ..acknowledgeCompleter = Completer<AttentionEvent>();
-    final controller = AttentionEventDetailController(
-      eventId: 'evt-001',
-      repository: repo,
-    );
-    await controller.load();
+  test(
+    'duplicate acknowledge tap sends one mutation while in flight',
+    () async {
+      final repo = _Events(detail: _event(AttentionEventStatus.open))
+        ..acknowledgeCompleter = Completer<AttentionEvent>();
+      final controller = AttentionEventDetailController(
+        eventId: 'evt-001',
+        repository: repo,
+      );
+      await controller.load();
 
-    final first = controller.acknowledge();
-    final second = controller.acknowledge();
-    await Future<void>.delayed(Duration.zero);
+      final first = controller.acknowledge();
+      final second = controller.acknowledge();
+      await Future<void>.delayed(Duration.zero);
 
-    expect(repo.acknowledgeCalls, 1);
-    expect(controller.isMutating, isTrue);
+      expect(repo.acknowledgeCalls, 1);
+      expect(controller.isMutating, isTrue);
 
-    repo.acknowledgeCompleter!.complete(
-      _event(
-        AttentionEventStatus.acknowledged,
-        acknowledgedBy: 'DR001',
-        acknowledgedAt: DateTime.utc(2026, 9, 16, 8, 2),
-      ),
-    );
-    await first;
-    await second;
-  });
+      repo.acknowledgeCompleter!.complete(
+        _event(
+          AttentionEventStatus.acknowledged,
+          acknowledgedBy: 'DR001',
+          acknowledgedAt: DateTime.utc(2026, 9, 16, 8, 2),
+        ),
+      );
+      await first;
+      await second;
+    },
+  );
 
   test('401 expires session without fabricating acknowledgement', () async {
     final auth = _Auth();
@@ -266,8 +277,7 @@ void main() {
 
   test('offline mutation leaves canonical lifecycle unchanged', () async {
     final open = _event(AttentionEventStatus.open);
-    final repo = _Events(detail: open)
-      ..acknowledgeFailure = ApiFailure.offline;
+    final repo = _Events(detail: open)..acknowledgeFailure = ApiFailure.offline;
     final controller = AttentionEventDetailController(
       eventId: 'evt-001',
       repository: repo,
