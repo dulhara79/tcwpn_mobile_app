@@ -5,6 +5,7 @@ import 'dart:convert';
 import 'dart:io';
 
 import 'package:http/http.dart' as http;
+import 'package:flutter/foundation.dart';
 
 import '../../core/config/env.dart';
 import '../../core/security/clinical_endpoint_policy.dart';
@@ -40,31 +41,23 @@ class ApiException implements Exception {
   });
 
   String get message => switch (kind) {
-        ApiFailure.offline =>
-          'No network connection. The note is saved on this device and can be analysed once you are back online.',
-        ApiFailure.timeout =>
-          'The service did not respond in time. Try again in a moment.',
-        ApiFailure.unauthorized =>
-          'Your session has expired. Sign out and sign in again. If that does not help, contact the study team.',
-        ApiFailure.forbidden =>
-          'You are signed in, but you do not have permission to access this patient or action.',
-        ApiFailure.notFound =>
-          'The clinical service could not be reached at the address this app was built with. Please report this to the study team.',
-        ApiFailure.conflict =>
-          'This record changed on the server. Refresh to see the current state before trying again.',
-        ApiFailure.notConfigured =>
-          'This build has no clinical service configured. The study team needs to install a configured build.',
-        ApiFailure.validation => detail.isEmpty
-            ? 'The service rejected this request.'
-            : 'The service rejected this request. $detail',
-        ApiFailure.server =>
-          'The clinical service reported an internal error. Your local work has not been replaced by a fabricated result.',
-        ApiFailure.malformed =>
-          'The service returned a response this app could not read. Report this with the time it happened.',
-        ApiFailure.insecureConnection =>
-          'The connection was refused because the configured clinical endpoint is not using an approved secure transport or its certificate could not be verified.',
-        ApiFailure.unknown => detail.isEmpty ? 'Something went wrong.' : detail,
-      };
+    ApiFailure.offline => 'No network connection. The note is saved on this device and can be analysed once you are back online.',
+    ApiFailure.timeout =>
+      'The service did not respond in time. Try again in a moment.',
+    ApiFailure.unauthorized => 'Your session has expired. Sign out and sign in again. If that does not help, contact the study team.',
+    ApiFailure.forbidden => 'You are signed in, but you do not have permission to access this patient or action.',
+    ApiFailure.notFound => 'The clinical service could not be reached at the address this app was built with. Please report this to the study team.',
+    ApiFailure.conflict => 'This record changed on the server. Refresh to see the current state before trying again.',
+    ApiFailure.notConfigured => 'This build has no clinical service configured. The study team needs to install a configured build.',
+    ApiFailure.validation =>
+      detail.isEmpty
+          ? 'The service rejected this request.'
+          : 'The service rejected this request. $detail',
+    ApiFailure.server => 'The clinical service reported an internal error. Your local work has not been replaced by a fabricated result.',
+    ApiFailure.malformed => 'The service returned a response this app could not read. Report this with the time it happened.',
+    ApiFailure.insecureConnection => 'The connection was refused because the configured clinical endpoint is not using an approved secure transport or its certificate could not be verified.',
+    ApiFailure.unknown => detail.isEmpty ? 'Something went wrong.' : detail,
+  };
 
   bool get isRetryable =>
       kind == ApiFailure.timeout ||
@@ -82,8 +75,8 @@ class ApiClient {
   final String Function() _bearer;
 
   ApiClient(this.baseUrl, {http.Client? client, String Function()? bearer})
-      : _http = client ?? SecureHttp.clientFor(baseUrl),
-        _bearer = bearer ?? _defaultBearer;
+    : _http = client ?? SecureHttp.clientFor(baseUrl),
+      _bearer = bearer ?? _defaultBearer;
 
   static String _defaultBearer() => Session.isActive ? Session.token! : '';
 
@@ -100,13 +93,12 @@ class ApiClient {
     String path,
     Map<String, dynamic> body, {
     Duration? timeout,
-  }) =>
-      _send(
-        () => _http
-            .post(_uri(path), headers: _headers, body: jsonEncode(body))
-            .timeout(timeout ?? Env.inferenceTimeout),
-        path,
-      );
+  }) => _send(
+    () => _http
+        .post(_uri(path), headers: _headers, body: jsonEncode(body))
+        .timeout(timeout ?? Env.inferenceTimeout),
+    path,
+  );
 
   Future<Map<String, dynamic>> get(
     String path, {
@@ -154,7 +146,9 @@ class ApiClient {
         detail: 'No base URL configured for this service.',
       );
     }
-    if (!ClinicalEndpointPolicy.isAllowed(baseUrl)) {
+    if (!ClinicalEndpointPolicy.isAllowed(baseUrl) ||
+        (kReleaseMode &&
+            Uri.tryParse(baseUrl)?.scheme.toLowerCase() != 'https')) {
       throw ApiException(
         kind: ApiFailure.insecureConnection,
         endpoint: endpoint,
@@ -230,7 +224,8 @@ class ApiClient {
     try {
       final decoded = jsonDecode(body);
       if (decoded is Map) {
-        final value = decoded['detail'] ?? decoded['error'] ?? decoded['message'];
+        final value =
+            decoded['detail'] ?? decoded['error'] ?? decoded['message'];
         if (value is String) {
           final text = value.trim();
           final lower = text.toLowerCase();

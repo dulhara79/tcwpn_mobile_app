@@ -14,29 +14,33 @@ void main() {
   test('P5B uses only verified timeline and clinical-note network routes', () {
     final source = File(p5bRepository).readAsStringSync();
 
-    expect(source, contains('/v1/doctor/patients/'));
-    expect(source, contains('/timeline?limit='));
+    expect(source, contains('/v1/patients/'));
+    expect(source, contains('/assessments'));
+    expect(source, isNot(contains('/v1/doctor/patients/')));
     expect(source, isNot(contains('/clinical-notes/history')));
     expect(source, isNot(contains('/notes/history')));
     expect(source, isNot(contains("'/predict'")));
     expect(source, isNot(contains('"/predict"')));
   });
 
-  test('P5B views and controllers do not derive authoritative risk locally', () {
-    final source = [
-      File(timelineScreen).readAsStringSync(),
-      File(notesScreen).readAsStringSync(),
-      File(timelineController).readAsStringSync(),
-      File(notesController).readAsStringSync(),
-    ].join('\n');
+  test(
+    'P5B views and controllers do not derive authoritative risk locally',
+    () {
+      final source = [
+        File(timelineScreen).readAsStringSync(),
+        File(notesScreen).readAsStringSync(),
+        File(timelineController).readAsStringSync(),
+        File(notesController).readAsStringSync(),
+      ].join('\n');
 
-    expect(source, isNot(contains('AlertBandX.fromScore')));
-    expect(source, isNot(contains('weight * score')));
-    expect(source, isNot(contains('FusionResult')));
-    expect(source, isNot(contains("'/predict'")));
-    expect(source, isNot(contains('"/predict"')));
-    expect(source, isNot(contains('largest weight')));
-  });
+      expect(source, isNot(contains('AlertBandX.fromScore')));
+      expect(source, isNot(contains('weight * score')));
+      expect(source, isNot(contains('FusionResult')));
+      expect(source, isNot(contains("'/predict'")));
+      expect(source, isNot(contains('"/predict"')));
+      expect(source, isNot(contains('largest weight')));
+    },
+  );
 
   test('P5B clinical notes preserve subordinate C3 wording', () {
     final source = File(notesScreen).readAsStringSync();

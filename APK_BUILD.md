@@ -45,15 +45,15 @@ Never commit:
 | Define                    |              Research/study build | Purpose                                           |
 | ------------------------- | --------------------------------: | ------------------------------------------------- |
 | `BACKEND_BASE`            |                          required | Central Backend URL; HTTPS for remote hosts       |
-| `AUTH_BASE`               | required for real participant use | clinician authentication service                  |
+| `AUTH_BASE`               |                           unused | legacy define; clinician JWT comes from `BACKEND_BASE` |
 | `APP_VERSION`             |                          required | version shown in research build identity          |
 | `BUILD_ENVIRONMENT`       |                          required | e.g. `study`, `staging`, `study-dr`               |
 | `BUILD_REVISION`          |                          required | exact Git revision used for the artifact          |
 | `DEMO_DATA`               |                   must be `false` | prevents synthetic fixtures in participant builds |
 | `TCWPN_BASE`              |                          optional | unauthenticated `/health` warm-up only            |
 | `PUSH_FIREBASE_SLOT`      |       optional, default `primary` | selects Primary or Secondary Firebase build slot  |
-| `FIREBASE_PRIMARY_*`      |   required for Primary push build | Firebase client routing configuration             |
-| `FIREBASE_SECONDARY_*`    |   required for Secondary DR build | Firebase client routing configuration             |
+| `FIREBASE_PRIMARY_*`      |                          optional | reserved for a future verified push integration  |
+| `FIREBASE_SECONDARY_*`    |                          optional | reserved for a future verified push integration  |
 | `AUTH_SALT`, `AUTH_LOCAL` |                     demo/dev only | synthetic local authentication                    |
 
 ## 4. Primary research APK
@@ -94,7 +94,6 @@ $REVISION = git rev-parse HEAD
 
 flutter build apk --release `
   --dart-define=BACKEND_BASE=$env:BACKEND_BASE `
-  --dart-define=AUTH_BASE=$env:AUTH_BASE `
   --dart-define=TCWPN_BASE=$env:TCWPN_BASE `
   --dart-define=APP_VERSION=1.0.0+1 `
   --dart-define=BUILD_ENVIRONMENT=study `
@@ -146,7 +145,6 @@ $REVISION = git rev-parse HEAD
 
 flutter build apk --release `
   --dart-define=BACKEND_BASE=$env:BACKEND_BASE `
-  --dart-define=AUTH_BASE=$env:AUTH_BASE `
   --dart-define=TCWPN_BASE=$env:TCWPN_BASE `
   --dart-define=APP_VERSION=1.0.0+1 `
   --dart-define=BUILD_ENVIRONMENT=study-dr `
@@ -159,7 +157,7 @@ flutter build apk --release `
   --dart-define=FIREBASE_SECONDARY_PROJECT_ID=$env:FIREBASE_SECONDARY_PROJECT_ID
 ```
 
-The Secondary build is not an instant runtime Firebase switch. FCM registration tokens are project-specific. Persistent server AttentionEvents plus polling remain the runtime recovery mechanism.
+FCM registration is disabled in release builds until the Central Backend implements and verifies `/v1/device-tokens`. Persistent server AttentionEvents and foreground polling are the P0 delivery path. The Firebase build slots are reserved for later work.
 
 ## 6. Demo-only build
 
@@ -225,11 +223,11 @@ Linux/macOS:
 sha256sum build/app/outputs/flutter-apk/app-release.apk
 ```
 
-## 9. Important Android packaging limitation
+## 9. Android release signing
 
-The current repository still uses the example Android application ID `lk.sliit.r26ds012.clinanx` and the `release` build type is currently wired to the debug signing configuration. Therefore a generated `--release` APK must be treated as a **research/development artifact, not a production-signed distribution artifact**.
+Before `flutter build apk --release`, create untracked `android/key.properties` with `storeFile`, `storePassword`, `keyAlias`, and `keyPassword`. `storeFile` is resolved relative to `android/app`; use a protected absolute path if the keystore is outside the repository. The build fails without these values instead of signing with a debug key. Never commit the keystore or passwords.
 
-Before external study distribution, the team must configure an approved unique application ID and a protected release keystore/signing process. Do not commit the keystore or its passwords.
+The application ID is `lk.sliit.r26ds012.clinanx`. Confirm its approval before external study distribution and verify the installed APK signing certificate fingerprint against the approved key.
 
 ## 10. Release handoff
 

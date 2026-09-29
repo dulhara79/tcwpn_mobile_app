@@ -34,7 +34,7 @@ This means some screens/flows may remain unavailable until the backend owner exp
 
 ## 4. Firebase Primary/Secondary is build-time disaster recovery
 
-Two Firebase projects are supported as separately configured build slots.
+Two Firebase projects have separately configured build slots reserved for a future push contract. Release builds currently use foreground polling.
 
 This is **not** seamless runtime switching. FCM registration tokens are project-specific. A Secondary build must register against the Secondary project.
 
@@ -42,26 +42,30 @@ Both projects still depend on Firebase/FCM infrastructure, so two projects do no
 
 ## 5. Polling fallback has lifecycle limits
 
-The current polling fallback runs every 30 seconds while ClinAnx is resumed/foregrounded and stops when the app is not active. It is a recovery path for missed/unavailable push while the app is in use; it is not a substitute for OS push waking a terminated/background app.
+The current polling path runs every 30 seconds while ClinAnx is resumed/foregrounded and stops when the app is not active. It cannot wake a terminated/background app.
 
 Persistent server AttentionEvents remain the source of truth.
 
 ## 6. Real-device push evidence depends on real configuration
 
+The Central Backend has no verified `/v1/device-tokens` route. ClinAnx disables push registration in release builds and relies on foreground AttentionEvent polling for P0. A configured Firebase project alone does not enable release notifications.
+
 Automated tests can verify token lifecycle, payload privacy, routing and deduplication, but they cannot prove real FCM delivery without actual Firebase project configuration and target devices.
 
 Real Primary/Secondary project IDs and credentials must not be fabricated or committed merely to make tests look complete.
+
+The legacy TC-WPN certificate pin list has a review date of `1970-01-01`; it must be regenerated and reviewed before relying on it. The Central Backend is not in that host list and uses platform TLS validation. Settings reports these scopes separately.
 
 ## 7. Android release packaging is not production-ready
 
 The current Android project still uses:
 
 - application ID `lk.sliit.r26ds012.clinanx`;
-- debug signing for the `release` build type.
+- a study signing keystore that the release build now requires outside source control.
 
-Therefore a generated release-mode APK is a research/development artifact, not a production-signed distribution package.
+Signing no longer falls back to debug keys. The study must approve the application ID and release key before distributing an APK.
 
-Before external study distribution, configure an approved unique application ID and protected release signing process. Signing material must remain outside source control.
+Signing material must remain outside source control.
 
 ## 8. iOS/APNs production delivery is not claimed
 

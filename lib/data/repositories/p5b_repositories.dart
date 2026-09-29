@@ -11,32 +11,44 @@ class CentralBackendTimelineRepository implements TimelineRepository {
   final ApiClient _api;
 
   CentralBackendTimelineRepository([ApiClient? api])
-      : _api = api ?? ApiClient(Env.backendBase);
+    : _api = api ?? ApiClient(Env.backendBase);
 
   @override
   Future<List<TimelineEntry>> history(
     String subjectId, {
     int limit = 200,
   }) async {
-    try {
-      final json = await _api.get(
-        '/v1/doctor/patients/${Uri.encodeComponent(subjectId)}/timeline?limit=$limit',
-        timeout: Env.quickTimeout,
+    final json = await _api.get(
+      '/v1/patients/${Uri.encodeComponent(subjectId)}/assessments',
+      timeout: Env.quickTimeout,
+    );
+    final raw = json['assessments'];
+    if (raw is! List) {
+      throw const ApiException(
+        kind: ApiFailure.malformed,
+        detail: 'Missing assessments history.',
       );
-      final raw = json['trend'];
-      if (raw is! List) return const <TimelineEntry>[];
-      return raw
-          .whereType<Map>()
-          .map((value) => TimelineEntry.fromJson(
-                Map<String, dynamic>.from(value),
-              ))
-          .toList(growable: false);
-    } on ApiException catch (error) {
-      if (error.kind == ApiFailure.notFound) {
-        return const <TimelineEntry>[];
-      }
-      rethrow;
     }
+    final assessments = raw
+        .whereType<Map>()
+        .take(limit)
+        .map(
+          (value) => TimelineEntry.fromJson(Map<String, dynamic>.from(value)),
+        )
+        .toList();
+    final rawEvents = json['events'];
+    if (rawEvents is List) {
+      assessments.addAll(
+        rawEvents.whereType<Map>().map(
+          (value) => TimelineEntry.fromEvent(Map<String, dynamic>.from(value)),
+        ),
+      );
+    }
+    assessments.sort(
+      (a, b) => (b.computedAt ?? DateTime.fromMillisecondsSinceEpoch(0))
+          .compareTo(a.computedAt ?? DateTime.fromMillisecondsSinceEpoch(0)),
+    );
+    return assessments;
   }
 }
 
@@ -47,10 +59,7 @@ class LocalCentralBackendClinicalNotesRepository
       RecordStore.loadNotes(localRecordId);
 
   @override
-  Future<void> saveLocalNotes(
-    String localRecordId,
-    List<ClinicalNote> notes,
-  ) =>
+  Future<void> saveLocalNotes(String localRecordId, List<ClinicalNote> notes) =>
       RecordStore.saveNotes(localRecordId, notes);
 
   @override

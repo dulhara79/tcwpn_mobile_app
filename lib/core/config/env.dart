@@ -44,7 +44,7 @@ class Env {
     defaultValue: 'r26-ds012-local-salt',
   );
   static const String authLocalAccounts = String.fromEnvironment('AUTH_LOCAL');
-  static bool get hasRemoteAuth => authBase.isNotEmpty;
+  static bool get hasRemoteAuth => backendBase.isNotEmpty;
 
   // ── Phase 7 push / disaster-recovery Firebase slots ───────────────────────
   // Only one slot is active in an installed build. FlutterFire Messaging does
@@ -59,40 +59,49 @@ class Env {
     defaultValue: 'primary',
   );
 
-  static const String firebasePrimaryApiKey =
-      String.fromEnvironment('FIREBASE_PRIMARY_API_KEY');
-  static const String firebasePrimaryAppId =
-      String.fromEnvironment('FIREBASE_PRIMARY_APP_ID');
-  static const String firebasePrimarySenderId =
-      String.fromEnvironment('FIREBASE_PRIMARY_SENDER_ID');
-  static const String firebasePrimaryProjectId =
-      String.fromEnvironment('FIREBASE_PRIMARY_PROJECT_ID');
-  static const String firebasePrimaryIosBundleId =
-      String.fromEnvironment('FIREBASE_PRIMARY_IOS_BUNDLE_ID');
+  static const String firebasePrimaryApiKey = String.fromEnvironment(
+    'FIREBASE_PRIMARY_API_KEY',
+  );
+  static const String firebasePrimaryAppId = String.fromEnvironment(
+    'FIREBASE_PRIMARY_APP_ID',
+  );
+  static const String firebasePrimarySenderId = String.fromEnvironment(
+    'FIREBASE_PRIMARY_SENDER_ID',
+  );
+  static const String firebasePrimaryProjectId = String.fromEnvironment(
+    'FIREBASE_PRIMARY_PROJECT_ID',
+  );
+  static const String firebasePrimaryIosBundleId = String.fromEnvironment(
+    'FIREBASE_PRIMARY_IOS_BUNDLE_ID',
+  );
 
-  static const String firebaseSecondaryApiKey =
-      String.fromEnvironment('FIREBASE_SECONDARY_API_KEY');
-  static const String firebaseSecondaryAppId =
-      String.fromEnvironment('FIREBASE_SECONDARY_APP_ID');
-  static const String firebaseSecondarySenderId =
-      String.fromEnvironment('FIREBASE_SECONDARY_SENDER_ID');
-  static const String firebaseSecondaryProjectId =
-      String.fromEnvironment('FIREBASE_SECONDARY_PROJECT_ID');
-  static const String firebaseSecondaryIosBundleId =
-      String.fromEnvironment('FIREBASE_SECONDARY_IOS_BUNDLE_ID');
+  static const String firebaseSecondaryApiKey = String.fromEnvironment(
+    'FIREBASE_SECONDARY_API_KEY',
+  );
+  static const String firebaseSecondaryAppId = String.fromEnvironment(
+    'FIREBASE_SECONDARY_APP_ID',
+  );
+  static const String firebaseSecondarySenderId = String.fromEnvironment(
+    'FIREBASE_SECONDARY_SENDER_ID',
+  );
+  static const String firebaseSecondaryProjectId = String.fromEnvironment(
+    'FIREBASE_SECONDARY_PROJECT_ID',
+  );
+  static const String firebaseSecondaryIosBundleId = String.fromEnvironment(
+    'FIREBASE_SECONDARY_IOS_BUNDLE_ID',
+  );
 
   static String get normalizedPushFirebaseSlot =>
       pushFirebaseSlot.trim().toLowerCase();
   static bool get hasValidPushFirebaseSlot =>
       validPushSlots.contains(normalizedPushFirebaseSlot);
-  static bool get useSecondaryFirebase => normalizedPushFirebaseSlot == 'secondary';
+  static bool get useSecondaryFirebase =>
+      normalizedPushFirebaseSlot == 'secondary';
 
-  static String get activeFirebaseApiKey => useSecondaryFirebase
-      ? firebaseSecondaryApiKey
-      : firebasePrimaryApiKey;
-  static String get activeFirebaseAppId => useSecondaryFirebase
-      ? firebaseSecondaryAppId
-      : firebasePrimaryAppId;
+  static String get activeFirebaseApiKey =>
+      useSecondaryFirebase ? firebaseSecondaryApiKey : firebasePrimaryApiKey;
+  static String get activeFirebaseAppId =>
+      useSecondaryFirebase ? firebaseSecondaryAppId : firebasePrimaryAppId;
   static String get activeFirebaseSenderId => useSecondaryFirebase
       ? firebaseSecondarySenderId
       : firebasePrimarySenderId;
@@ -119,24 +128,24 @@ class Env {
 
   static bool get hasBackend => backendBase.isNotEmpty;
   static bool get hasTcwpnWarmup => tcwpnBase.isNotEmpty;
-  static bool get isConfigured => hasBackend;
+  static bool get isConfigured => hasBackend && isBackendTransportSafe;
 
   /// Handbook Phase 8 transport rule: participant/clinical traffic uses HTTPS.
   /// Plain HTTP is tolerated only for loopback development, never remote hosts.
   static bool get isBackendTransportSafe {
-    if (!hasBackend) return true;
+    if (!hasBackend) return false;
     final uri = Uri.tryParse(backendBase.trim());
     if (uri == null || uri.host.isEmpty) return false;
     if (uri.scheme.toLowerCase() == 'https') return true;
     if (uri.scheme.toLowerCase() != 'http') return false;
     final host = uri.host.toLowerCase();
-    return host == 'localhost' || host == '127.0.0.1' || host == '::1';
+    return !const bool.fromEnvironment('dart.vm.product') &&
+        (host == 'localhost' || host == '127.0.0.1' || host == '::1');
   }
 
   static const Duration stalenessThreshold = Duration(hours: 72);
 
-  static const bool demoData = bool.fromEnvironment(
-    'DEMO_DATA',
-    defaultValue: false,
-  );
+  static const bool demoData =
+      !bool.fromEnvironment('dart.vm.product') &&
+      bool.fromEnvironment('DEMO_DATA', defaultValue: false);
 }

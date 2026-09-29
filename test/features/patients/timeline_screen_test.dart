@@ -11,7 +11,10 @@ class _Repository implements TimelineRepository {
   _Repository(this.rows);
 
   @override
-  Future<List<TimelineEntry>> history(String subjectId, {int limit = 200}) async => rows;
+  Future<List<TimelineEntry>> history(
+    String subjectId, {
+    int limit = 200,
+  }) async => rows;
 }
 
 Future<TimelineController> _pump(
@@ -26,38 +29,69 @@ Future<TimelineController> _pump(
   );
   await controller.load();
   await tester.pumpWidget(
-    MaterialApp(home: TimelineScreen(controller: controller, displayId: 'Patient A')),
+    MaterialApp(
+      home: TimelineScreen(controller: controller, displayId: 'Patient A'),
+    ),
   );
   await tester.pump();
   return controller;
 }
 
 void main() {
-  testWidgets('renders server timeline values and gap warning without interpolation',
-      (tester) async {
-    await _pump(tester, [
-      TimelineEntry(
-        composite: 0.58,
-        tier: 'Medium',
-        band: 'AMBER',
-        assessmentStatus: 'complete',
-        missingModalities: const ['c2_behavioral'],
-        computedAt: DateTime.utc(2026, 9, 16, 8),
-        trigger: 'note-ingest',
-      ),
-    ]);
+  testWidgets(
+    'renders server timeline values and gap warning without interpolation',
+    (tester) async {
+      await _pump(tester, [
+        TimelineEntry(
+          composite: 0.58,
+          tier: 'Medium',
+          band: 'AMBER',
+          assessmentStatus: 'complete',
+          missingModalities: const ['c2_behavioral'],
+          computedAt: DateTime.utc(2026, 9, 16, 8),
+          trigger: null,
+          fusionResultId: 123,
+        ),
+      ]);
 
-    expect(find.text('24 hours'), findsOneWidget);
-    expect(find.text('7 days'), findsOneWidget);
-    expect(find.textContaining('0.58'), findsOneWidget);
-    expect(find.textContaining('Medium'), findsOneWidget);
-    expect(find.textContaining('AMBER'), findsOneWidget);
-    expect(find.textContaining('Complete'), findsOneWidget);
-    expect(find.textContaining('note-ingest'), findsOneWidget);
-    expect(find.textContaining('Gaps mean no assessment record was returned'), findsOneWidget);
-  });
+      expect(find.text('24 hours'), findsOneWidget);
+      expect(find.text('7 days'), findsOneWidget);
+      expect(find.textContaining('0.58'), findsOneWidget);
+      expect(find.textContaining('Medium'), findsOneWidget);
+      expect(find.textContaining('AMBER'), findsOneWidget);
+      expect(find.textContaining('Complete'), findsOneWidget);
+      expect(find.textContaining('Assessment 123'), findsOneWidget);
+      expect(
+        find.textContaining('Gaps mean no assessment record was returned'),
+        findsOneWidget,
+      );
+    },
+  );
 
-  testWidgets('missing composite is not rendered as zero or low', (tester) async {
+  testWidgets(
+    'shows persisted event marker without treating it as an assessment',
+    (tester) async {
+      await _pump(tester, [
+        TimelineEntry.fromEvent({
+          'id': 'evt-1',
+          'event_type': 'acute_escalation_forecast',
+          'status': 'ACKNOWLEDGED',
+          'fusion_result_id': 123,
+          'created_at': '2026-09-16T09:00:00Z',
+        }),
+      ]);
+      expect(
+        find.textContaining('Attention event · ACKNOWLEDGED'),
+        findsOneWidget,
+      );
+      expect(find.textContaining('evt-1'), findsOneWidget);
+      expect(find.textContaining('0.00'), findsNothing);
+    },
+  );
+
+  testWidgets('missing composite is not rendered as zero or low', (
+    tester,
+  ) async {
     await _pump(tester, [
       const TimelineEntry(
         composite: null,
@@ -76,22 +110,29 @@ void main() {
     expect(find.text('Low'), findsNothing);
   });
 
-  testWidgets('empty selected window stays explicit and does not invent forecast history',
-      (tester) async {
-    await _pump(tester, [
-      TimelineEntry(
-        composite: 0.42,
-        tier: 'Medium',
-        band: 'AMBER',
-        assessmentStatus: 'complete',
-        missingModalities: const [],
-        computedAt: DateTime.utc(2026, 9, 10),
-        trigger: 'manual',
-      ),
-    ]);
+  testWidgets(
+    'empty selected window stays explicit and does not invent forecast history',
+    (tester) async {
+      await _pump(tester, [
+        TimelineEntry(
+          composite: 0.42,
+          tier: 'Medium',
+          band: 'AMBER',
+          assessmentStatus: 'complete',
+          missingModalities: const [],
+          computedAt: DateTime.utc(2026, 9, 10),
+          trigger: 'manual',
+        ),
+      ]);
 
-    expect(find.textContaining('No assessment records were returned for this window'), findsOneWidget);
-    expect(find.textContaining('Forecast history'), findsNothing);
-    expect(find.textContaining('Attention event'), findsNothing);
-  });
+      expect(
+        find.textContaining(
+          'No assessment records were returned for this window',
+        ),
+        findsOneWidget,
+      );
+      expect(find.textContaining('Forecast history'), findsNothing);
+      expect(find.textContaining('Attention event'), findsNothing);
+    },
+  );
 }
