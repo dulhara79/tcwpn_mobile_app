@@ -55,11 +55,12 @@ class _LinkPatientScreenState extends State<LinkPatientScreen> {
         };
       });
     } catch (_) {
-      if (mounted)
+      if (mounted) {
         setState(() {
           _busy = false;
           _error = 'Could not link this patient. Check the code and connection, then try again.';
         });
+      }
     }
   }
 
