@@ -7,18 +7,22 @@ import '../../core/design/tokens.dart';
 import '../../domain/contracts/contract_enums.dart';
 import '../../domain/contracts/dashboard_snapshot.dart';
 import '../../domain/contracts/patient_summary.dart';
+import '../../domain/repositories/assignment_invite_repository.dart';
 import '../../state/async_data_state.dart';
 import '../../state/dashboard_controller.dart';
 import 'patient_overview_screen.dart';
+import 'link_patient_screen.dart';
 
 class PatientsScreen extends StatefulWidget {
   final DashboardController controller;
   final ValueChanged<PatientSummary>? onOpenPatient;
+  final AssignmentInviteRepository? inviteRepository;
 
   const PatientsScreen({
     super.key,
     required this.controller,
     this.onOpenPatient,
+    this.inviteRepository,
   });
 
   @override
@@ -57,6 +61,31 @@ class _PatientsScreenState extends State<PatientsScreen> {
     );
   }
 
+  Future<void> _linkPatient() async {
+    final subjectId = await Navigator.of(context).push<String>(
+      MaterialPageRoute(
+        builder: (_) => LinkPatientScreen(repository: widget.inviteRepository),
+      ),
+    );
+    if (!mounted || subjectId == null) return;
+    await widget.controller.load(showLoading: false);
+    if (!mounted) return;
+    final snapshot = widget.controller.state.data;
+    final refreshed =
+        snapshot != null &&
+        !snapshot.isFromCache &&
+        snapshot.assignedPatients.any(
+          (patient) => patient.subjectId == subjectId,
+        );
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        content: Text(
+          refreshed ? 'Patient linked. Assigned roster refreshed.' : 'Invitation accepted. The assigned roster could not be refreshed yet.',
+        ),
+      ),
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     return AnimatedBuilder(
@@ -64,7 +93,16 @@ class _PatientsScreenState extends State<PatientsScreen> {
       builder: (context, _) {
         final state = widget.controller.state;
         return Scaffold(
-          appBar: AppBar(title: const Text('Patients')),
+          appBar: AppBar(
+            title: const Text('Patients'),
+            actions: [
+              IconButton(
+                tooltip: 'Link patient with invite',
+                icon: const Icon(Icons.person_add_alt_1_outlined),
+                onPressed: _linkPatient,
+              ),
+            ],
+          ),
           body: _bodyForState(context, state),
         );
       },
@@ -92,37 +130,44 @@ class _PatientsScreenState extends State<PatientsScreen> {
             ? Icons.cloud_off_rounded
             : Icons.folder_shared_outlined,
         title: title,
-        body: state.message ??
-            'The assignment-scoped patient roster could not be loaded from the Central Backend.',
-        actionLabel:
-            state.status == AsyncDataStatus.sessionExpired ? null : 'Retry',
+        body: state.message ?? 'The assignment-scoped patient roster could not be loaded from the Central Backend.',
+        actionLabel: state.status == AsyncDataStatus.sessionExpired
+            ? null
+            : 'Retry',
         onAction: state.status == AsyncDataStatus.sessionExpired
             ? null
             : () => widget.controller.load(),
       );
     }
 
-    final attentionSubjects =
-        snapshot.openEvents.map((event) => event.subjectId).toSet();
-    final patients = snapshot.assignedPatients.where((patient) {
-      final query = _query.trim().toLowerCase();
-      final matchesQuery = query.isEmpty ||
-          patient.subjectId.toLowerCase().contains(query) ||
-          (patient.displayId ?? '').toLowerCase().contains(query);
-      final matchesAttention =
-          !_needsAttentionOnly || attentionSubjects.contains(patient.subjectId);
-      final matchesCurrent = _currentTier == null ||
-          patient.currentAssessment?.tier == _currentTier;
-      final matchesForecast =
-          _forecastTier == null || patient.forecast?.tier == _forecastTier;
-      final matchesStatus = _assessmentStatus == null ||
-          patient.assessmentStatus == _assessmentStatus;
-      return matchesQuery &&
-          matchesAttention &&
-          matchesCurrent &&
-          matchesForecast &&
-          matchesStatus;
-    }).toList(growable: false);
+    final attentionSubjects = snapshot.openEvents
+        .map((event) => event.subjectId)
+        .toSet();
+    final patients = snapshot.assignedPatients
+        .where((patient) {
+          final query = _query.trim().toLowerCase();
+          final matchesQuery =
+              query.isEmpty ||
+              patient.subjectId.toLowerCase().contains(query) ||
+              (patient.displayId ?? '').toLowerCase().contains(query);
+          final matchesAttention =
+              !_needsAttentionOnly ||
+              attentionSubjects.contains(patient.subjectId);
+          final matchesCurrent =
+              _currentTier == null ||
+              patient.currentAssessment?.tier == _currentTier;
+          final matchesForecast =
+              _forecastTier == null || patient.forecast?.tier == _forecastTier;
+          final matchesStatus =
+              _assessmentStatus == null ||
+              patient.assessmentStatus == _assessmentStatus;
+          return matchesQuery &&
+              matchesAttention &&
+              matchesCurrent &&
+              matchesForecast &&
+              matchesStatus;
+        })
+        .toList(growable: false);
 
     return RefreshIndicator(
       onRefresh: () => widget.controller.load(showLoading: false),
@@ -134,15 +179,13 @@ class _PatientsScreenState extends State<PatientsScreen> {
               snapshot.isFromCache) ...[
             InlineNotice(
               icon: Icons.cloud_off_rounded,
-              text: state.message ??
-                  'Offline. Showing the last server-provided assigned-patient snapshot.',
+              text: state.message ?? 'Offline. Showing the last server-provided assigned-patient snapshot.',
             ),
             const SizedBox(height: Ds.s4),
           ] else if (state.status == AsyncDataStatus.partial) ...[
             InlineNotice(
               icon: Icons.info_outline_rounded,
-              text: state.message ??
-                  'Some assigned-patient assessment data is temporarily unavailable.',
+              text: state.message ?? 'Some assigned-patient assessment data is temporarily unavailable.',
             ),
             const SizedBox(height: Ds.s4),
           ],
@@ -177,22 +220,14 @@ class _PatientsScreenState extends State<PatientsScreen> {
               _enumMenu<RiskTier>(
                 label: 'Current',
                 value: _currentTier,
-                values: const [
-                  RiskTier.low,
-                  RiskTier.medium,
-                  RiskTier.high,
-                ],
+                values: const [RiskTier.low, RiskTier.medium, RiskTier.high],
                 text: _tierLabel,
                 onChanged: (value) => setState(() => _currentTier = value),
               ),
               _enumMenu<RiskTier>(
                 label: 'Forecast',
                 value: _forecastTier,
-                values: const [
-                  RiskTier.low,
-                  RiskTier.medium,
-                  RiskTier.high,
-                ],
+                values: const [RiskTier.low, RiskTier.medium, RiskTier.high],
                 text: _tierLabel,
                 onChanged: (value) => setState(() => _forecastTier = value),
               ),
@@ -205,8 +240,7 @@ class _PatientsScreenState extends State<PatientsScreen> {
                   AssessmentStatus.unavailable,
                 ],
                 text: _assessmentLabel,
-                onChanged: (value) =>
-                    setState(() => _assessmentStatus = value),
+                onChanged: (value) => setState(() => _assessmentStatus = value),
               ),
             ],
           ),
@@ -233,8 +267,9 @@ class _PatientsScreenState extends State<PatientsScreen> {
                 padding: const EdgeInsets.only(bottom: Ds.s3),
                 child: _AssignedPatientCard(
                   patient: patient,
-                  hasOpenAttention:
-                      attentionSubjects.contains(patient.subjectId),
+                  hasOpenAttention: attentionSubjects.contains(
+                    patient.subjectId,
+                  ),
                   onTap: () => _openPatient(context, patient),
                 ),
               ),
@@ -256,15 +291,9 @@ class _PatientsScreenState extends State<PatientsScreen> {
       initialValue: value,
       onSelected: onChanged,
       itemBuilder: (_) => [
-        PopupMenuItem<T?>(
-          value: null,
-          child: Text('All $label'),
-        ),
+        PopupMenuItem<T?>(value: null, child: Text('All $label')),
         ...values.map(
-          (item) => PopupMenuItem<T?>(
-            value: item,
-            child: Text(text(item)),
-          ),
+          (item) => PopupMenuItem<T?>(value: item, child: Text(text(item))),
         ),
       ],
       child: Chip(
@@ -289,7 +318,8 @@ class _AssignedPatientCard extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final current = patient.currentAssessment;
-    final unavailable = patient.assessmentStatus == AssessmentStatus.unavailable ||
+    final unavailable =
+        patient.assessmentStatus == AssessmentStatus.unavailable ||
         current == null ||
         current.score == null;
 
@@ -332,10 +362,7 @@ class _AssignedPatientCard extends StatelessWidget {
           if (unavailable)
             const Text(
               'Current assessment: unavailable',
-              style: TextStyle(
-                fontWeight: FontWeight.w600,
-                color: Ds.inkMuted,
-              ),
+              style: TextStyle(fontWeight: FontWeight.w600, color: Ds.inkMuted),
             )
           else
             Text(
@@ -364,7 +391,8 @@ class _AssignedPatientCard extends StatelessWidget {
                 style: const TextStyle(fontSize: 11.5, color: Ds.inkMuted),
               ),
           ],
-          if (patient.fusionResultId != null || patient.lastUpdated != null) ...[
+          if (patient.fusionResultId != null ||
+              patient.lastUpdated != null) ...[
             const SizedBox(height: Ds.s3),
             Wrap(
               spacing: Ds.s4,
@@ -390,25 +418,25 @@ class _AssignedPatientCard extends StatelessWidget {
 }
 
 String _tierLabel(RiskTier tier) => switch (tier) {
-      RiskTier.low => 'Low',
-      RiskTier.medium => 'Medium',
-      RiskTier.high => 'High',
-      RiskTier.unknown => 'Unknown',
-    };
+  RiskTier.low => 'Low',
+  RiskTier.medium => 'Medium',
+  RiskTier.high => 'High',
+  RiskTier.unknown => 'Unknown',
+};
 
 String _assessmentLabel(AssessmentStatus status) => switch (status) {
-      AssessmentStatus.complete => 'Complete assessment',
-      AssessmentStatus.partial => 'Partial assessment',
-      AssessmentStatus.unavailable =>
-        'Assessment unavailable — insufficient current data',
-      AssessmentStatus.unknown => 'Assessment status unknown',
-    };
+  AssessmentStatus.complete => 'Complete assessment',
+  AssessmentStatus.partial => 'Partial assessment',
+  AssessmentStatus.unavailable =>
+    'Assessment unavailable — insufficient current data',
+  AssessmentStatus.unknown => 'Assessment status unknown',
+};
 
 String _forecastLabel(ForecastScope scope) => switch (scope) {
-      ForecastScope.physiological => 'Near-term physiological forecast',
-      ForecastScope.multimodal => 'Multimodal forecast',
-      ForecastScope.unknown => 'Forecast scope unavailable',
-    };
+  ForecastScope.physiological => 'Near-term physiological forecast',
+  ForecastScope.multimodal => 'Multimodal forecast',
+  ForecastScope.unknown => 'Forecast scope unavailable',
+};
 
 String _scoreLabel(double? score) =>
     score == null ? '—' : score.toStringAsFixed(2);

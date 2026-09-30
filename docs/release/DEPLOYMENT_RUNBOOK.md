@@ -68,13 +68,14 @@ Verify in order:
 1. App launches without a crash.
 2. Consent gate appears when required.
 3. Clinician can authenticate using the configured auth mode.
-4. Settings shows the expected app version, environment, source revision, backend host and Firebase slot/project.
-5. Dashboard either loads server data or presents an explicit unavailable/error state.
-6. Patients/Patient Overview do not fabricate low risk when data is missing.
-7. Current multimodal assessment and forecast are clearly separate.
-8. C2 is visibly experimental/excluded when present.
-9. CARE evidence failure/abstention is explicit.
-10. Sign-out clears the session.
+4. For a patient-first record, Aura creates a one-use invitation under “Connect to Doctor” → “Give clinician a code”. In ClinAnx Patients → “Link patient with invite”, enter that exact case-sensitive code. Confirm the assigned roster reloads with the canonical subject; entering only the patient ID must never grant access.
+5. Settings shows the expected app version, environment, source revision, backend host and Firebase slot/project.
+6. Dashboard either loads server data or presents an explicit unavailable/error state.
+7. Patients/Patient Overview do not fabricate low risk when data is missing.
+8. Current multimodal assessment and forecast are clearly separate.
+9. C2 is visibly experimental/excluded when present.
+10. CARE evidence failure/abstention is explicit.
+11. Sign-out clears the session.
 
 ## 7. AttentionEvent and notification smoke test
 
