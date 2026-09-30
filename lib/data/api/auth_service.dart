@@ -1,14 +1,7 @@
 // lib/data/api/auth_service.dart
 //
-// Two modes, chosen at build time by whether AUTH_BASE is set.
-//
-//   REMOTE — the auth service verifies credentials, issues sessions, sends OTP
-//            email, and handles registration and password reset. Required
-//            before any real patient data.
-//
-//   LOCAL  — credentials compiled into the build. Development and demos only.
-//            Registration and password reset are unavailable, and the app says
-//            so rather than showing controls that cannot work.
+// Central Backend issues clinician JWTs. Local accounts are for debug demos only.
+// Central Backend does not expose clinician registration or password reset.
 
 import 'dart:convert';
 
@@ -48,33 +41,18 @@ class AuthService {
   // Env is the single build-time configuration source. Keeping the auth defines
   // here as a second String.fromEnvironment set previously allowed documentation
   // and production code to drift independently.
-  static const String _base = Env.authBase;
   static const String _salt = Env.authSalt;
   static const String _localAccounts = Env.authLocalAccounts;
 
-  static bool get isLocalMode => Env.backendBase.isEmpty && _base.isEmpty;
-  static bool get supportsSelfService => _base.isNotEmpty;
-  static bool get shouldWarnInsecure => isLocalMode && kReleaseMode;
+  static bool get isLocalMode => !kReleaseMode && Env.backendBase.isEmpty;
+  static bool get supportsSelfService => false;
+  static bool get shouldWarnInsecure => false;
 
-  static ApiClient _client() => ApiClient(_base);
-
-  static void _ensureSelfServiceConfigured() {
-    if (isLocalMode) {
-      throw const AuthMessage(
-        'Self-service account actions are disabled in local mode. '
-        'Set AUTH_BASE to the ClinAnx auth service to use register/reset.',
-      );
-    }
-
-    final authHost = Uri.tryParse(_base)?.host.toLowerCase() ?? '';
-    final tcwpnHost = Uri.tryParse(Env.tcwpnBase)?.host.toLowerCase() ?? '';
-    if (authHost.isNotEmpty && authHost == tcwpnHost) {
-      throw const AuthMessage(
-        'AUTH_BASE is currently set to the TC-WPN model service ($_base). '
-        'Password reset and registration must use your auth backend '
-        '(for example: https://<org>-clinanx-auth.hf.space).',
-      );
-    }
+  static Never _unsupportedSelfService() {
+    throw const AuthMessage(
+      'Clinician account changes are managed by the study team. '
+      'Contact the study team for registration or password reset.',
+    );
   }
 
   // ── SIGN IN ──────────────────────────────────────────────────────────────
@@ -86,23 +64,37 @@ class AuthService {
     required String password,
   }) async {
     if (isLocalMode) return _local(clinicianId, password);
-
-    final api = ApiClient(Env.backendBase.isNotEmpty ? Env.backendBase : _base);
-    try {
-      final json = await api.post(
-        '/auth/login',
-        {'clinician_id': clinicianId, 'password': password},
-        timeout: const Duration(seconds: 30),
+    if (Env.backendBase.trim().isEmpty) {
+      throw const AuthMessage(
+        'This build has no Central Backend configured. Contact the study team.',
       );
+    }
+
+    final api = ApiClient(Env.backendBase);
+    try {
+      final json = await api.post('/auth/login', {
+        'clinician_id': clinicianId,
+        'password': password,
+      }, timeout: const Duration(seconds: 30));
       final token = '${json['access_token'] ?? ''}';
-      if (token.isEmpty) return null;
       final identity = json['clinician'] is Map
           ? Map<String, dynamic>.from(json['clinician'] as Map)
-          : json;
-      final expiresAt = DateTime.tryParse('${json['expires_at'] ?? ''}')?.toUtc();
+          : const <String, dynamic>{};
+      final expiresAt = DateTime.tryParse('${json['expires_at'] ?? ''}')
+          ?.toUtc();
+      final canonicalId = '${identity['clinician_id'] ?? ''}'.trim();
+      if (token.isEmpty ||
+          canonicalId.isEmpty ||
+          expiresAt == null ||
+          !expiresAt.isAfter(DateTime.now().toUtc())) {
+        throw const ApiException(
+          kind: ApiFailure.malformed,
+          detail: 'Clinician login response is missing identity, token or a valid expiry.',
+        );
+      }
       return AuthSession(
-        clinicianId: '${identity['clinician_id'] ?? clinicianId}',
-        displayName: '${identity['display_name'] ?? clinicianId}',
+        clinicianId: canonicalId,
+        displayName: '${identity['display_name'] ?? canonicalId}',
         token: token,
         role: identity['role']?.toString(),
         expiresAt: expiresAt,
@@ -120,8 +112,7 @@ class AuthService {
 
   // ── REGISTRATION ─────────────────────────────────────────────────────────
 
-  /// Creates an account and triggers the verification email.
-  /// Returns the email the code was sent to.
+  /// Retained for older screens; the Central Backend has no account-creation contract.
   static Future<String> register({
     required String clinicianId,
     required String displayName,
@@ -129,78 +120,26 @@ class AuthService {
     required String password,
     required String inviteCode,
   }) async {
-    _ensureSelfServiceConfigured();
-    final api = _client();
-    try {
-      final json = await api.post(
-        '/auth/register',
-        {
-          'clinician_id': clinicianId,
-          'display_name': displayName,
-          'email': email,
-          'password': password,
-          'invite_code': inviteCode,
-        },
-        timeout: const Duration(seconds: 45),
-      );
-      return '${json['email'] ?? email}';
-    } on ApiException catch (e) {
-      throw AuthMessage(e.detail.isEmpty ? e.message : e.detail);
-    } finally {
-      api.close();
-    }
+    _unsupportedSelfService();
   }
 
-  /// Confirms the emailed code. Returns the server's guidance on what happens
-  /// next — normally that approval is pending.
+  /// Retained for older screens; disabled with the same account guidance.
   static Future<String> verifyEmail({
     required String clinicianId,
     required String code,
   }) async {
-    _ensureSelfServiceConfigured();
-    final api = _client();
-    try {
-      final json = await api.post(
-        '/auth/verify',
-        {'clinician_id': clinicianId, 'code': code},
-        timeout: const Duration(seconds: 30),
-      );
-      return '${json['next'] ?? 'Your email is verified.'}';
-    } on ApiException catch (e) {
-      throw AuthMessage(e.detail.isEmpty ? e.message : e.detail);
-    } finally {
-      api.close();
-    }
+    _unsupportedSelfService();
   }
 
   static Future<void> resendVerification(String clinicianId) async {
-    _ensureSelfServiceConfigured();
-    final api = _client();
-    try {
-      await api.post('/auth/resend', {'clinician_id': clinicianId, 'code': ''},
-          timeout: const Duration(seconds: 30));
-    } on ApiException catch (e) {
-      throw AuthMessage(e.detail.isEmpty ? e.message : e.detail);
-    } finally {
-      api.close();
-    }
+    _unsupportedSelfService();
   }
 
   // ── PASSWORD RESET ───────────────────────────────────────────────────────
 
-  /// Requests a reset code. The server should answer identically whether or
-  /// not the address is registered, so this cannot be used for enumeration.
+  /// Retained for older screens; disabled until an authenticated contract exists.
   static Future<void> requestReset(String email) async {
-    _ensureSelfServiceConfigured();
-    final api = _client();
-    try {
-      await api.post('/auth/forgot-password', {'email': email},
-          timeout: const Duration(seconds: 45));
-    } on ApiException catch (e) {
-      throw AuthMessage(e.detail.isEmpty ? e.message : e.detail);
-    } finally {
-      api.close();
-    }
+    _unsupportedSelfService();
   }
 
   static Future<void> resetPassword({
@@ -208,19 +147,7 @@ class AuthService {
     required String code,
     required String newPassword,
   }) async {
-    _ensureSelfServiceConfigured();
-    final api = _client();
-    try {
-      await api.post(
-        '/auth/reset-password',
-        {'email': email, 'code': code, 'new_password': newPassword},
-        timeout: const Duration(seconds: 30),
-      );
-    } on ApiException catch (e) {
-      throw AuthMessage(e.detail.isEmpty ? e.message : e.detail);
-    } finally {
-      api.close();
-    }
+    _unsupportedSelfService();
   }
 
   // ── LOCAL MODE ───────────────────────────────────────────────────────────
@@ -229,8 +156,9 @@ class AuthService {
       sha256.convert(utf8.encode('$_salt$password')).toString();
 
   static AuthSession? _local(String id, String password) {
-    final entries =
-        _localAccounts.isEmpty ? const <String>[] : _localAccounts.split(';');
+    final entries = _localAccounts.isEmpty
+        ? const <String>[]
+        : _localAccounts.split(';');
     final wanted = digest(password);
     for (final e in entries) {
       final parts = e.split('|');
@@ -245,5 +173,4 @@ class AuthService {
     }
     return null;
   }
-
 }

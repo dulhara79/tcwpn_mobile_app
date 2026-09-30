@@ -76,7 +76,7 @@ If a check fails:
 
 Confirm:
 
-- remote `BACKEND_BASE` and `AUTH_BASE` use HTTPS;
+- remote `BACKEND_BASE` uses HTTPS and serves clinician `/auth/login`;
 - `APP_VERSION` matches `pubspec.yaml`;
 - `BUILD_REVISION` equals the exact source commit;
 - `BUILD_ENVIRONMENT` identifies the intended environment;

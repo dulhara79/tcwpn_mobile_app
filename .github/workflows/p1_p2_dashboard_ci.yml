@@ -1,6 +1,9 @@
 name: ClinAnx integration and hardening checks
 
 on:
+  push:
+    branches:
+      - main
   pull_request:
     branches:
       - main

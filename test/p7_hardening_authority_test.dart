@@ -38,7 +38,7 @@ void main() {
     final env = File('lib/core/config/env.dart').readAsStringSync();
     final main = File('lib/main.dart').readAsStringSync();
 
-    expect(env, contains("'DEMO_DATA',\n    defaultValue: false"));
+    expect(env, contains("bool.fromEnvironment('DEMO_DATA', defaultValue: false)"));
     expect(main, isNot(contains('MediaQuery.withClampedTextScaling')));
   });
 }

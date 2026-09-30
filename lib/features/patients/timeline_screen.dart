@@ -11,11 +11,8 @@ class TimelineScreen extends StatefulWidget {
   final String? subjectId;
   final String? displayId;
 
-  const TimelineScreen({
-    super.key,
-    required this.controller,
-    this.displayId,
-  }) : subjectId = null;
+  const TimelineScreen({super.key, required this.controller, this.displayId})
+    : subjectId = null;
 
   const TimelineScreen.production({
     super.key,
@@ -35,7 +32,8 @@ class _TimelineScreenState extends State<TimelineScreen> {
   void initState() {
     super.initState();
     _ownsController = widget.controller == null;
-    _controller = widget.controller ??
+    _controller =
+        widget.controller ??
         TimelineController(
           subjectId: widget.subjectId!,
           repository: CentralBackendTimelineRepository(),
@@ -59,7 +57,13 @@ class _TimelineScreenState extends State<TimelineScreen> {
   Widget build(BuildContext context) {
     final state = _controller.state;
     return Scaffold(
-      appBar: AppBar(title: Text(widget.displayId == null ? 'Timeline' : '${widget.displayId} · Timeline')),
+      appBar: AppBar(
+        title: Text(
+          widget.displayId == null
+              ? 'Timeline'
+              : '${widget.displayId} · Timeline',
+        ),
+      ),
       body: Padding(
         padding: const EdgeInsets.all(16),
         child: Column(
@@ -67,8 +71,14 @@ class _TimelineScreenState extends State<TimelineScreen> {
           children: [
             SegmentedButton<TimelineWindow>(
               segments: const [
-                ButtonSegment(value: TimelineWindow.hours24, label: Text('24 hours')),
-                ButtonSegment(value: TimelineWindow.days7, label: Text('7 days')),
+                ButtonSegment(
+                  value: TimelineWindow.hours24,
+                  label: Text('24 hours'),
+                ),
+                ButtonSegment(
+                  value: TimelineWindow.days7,
+                  label: Text('7 days'),
+                ),
               ],
               selected: {_controller.window},
               onSelectionChanged: (value) => _controller.setWindow(value.first),
@@ -91,14 +101,20 @@ class _TimelineScreenState extends State<TimelineScreen> {
       return const Center(child: CircularProgressIndicator());
     }
     if (state.status == AsyncDataStatus.empty) {
-      return const Center(child: Text('No assessment records were returned for this window.'));
+      return const Center(
+        child: Text('No assessment records were returned for this window.'),
+      );
     }
     if (state.status != AsyncDataStatus.data) {
-      return Center(child: Text(state.message ?? 'Timeline history unavailable.'));
+      return Center(
+        child: Text(state.message ?? 'Timeline history unavailable.'),
+      );
     }
     final rows = _controller.visibleEntries;
     if (rows.isEmpty) {
-      return const Center(child: Text('No assessment records were returned for this window.'));
+      return const Center(
+        child: Text('No assessment records were returned for this window.'),
+      );
     }
     return ListView.separated(
       itemCount: rows.length,
@@ -114,14 +130,42 @@ class _TimelineRow extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final score = entry.composite == null ? '—' : entry.composite!.toStringAsFixed(2);
+    if (entry.eventId != null) {
+      final time = entry.computedAt == null
+          ? 'Time not reported'
+          : DateFormat('d MMM yyyy, HH:mm').format(entry.computedAt!);
+      return Card(
+        child: Padding(
+          padding: const EdgeInsets.all(14),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(
+                'Attention event · ${entry.eventStatus ?? 'Status unavailable'}',
+                style: const TextStyle(fontWeight: FontWeight.w700),
+              ),
+              Text(entry.eventType ?? 'Event type unavailable'),
+              Text(
+                'Event ${entry.eventId} · Assessment ${entry.fusionResultId ?? 'unavailable'}',
+              ),
+              Text(time),
+            ],
+          ),
+        ),
+      );
+    }
+    final score = entry.composite == null
+        ? '—'
+        : entry.composite!.toStringAsFixed(2);
     final tier = entry.tier ?? '—';
     final band = entry.band ?? '—';
     final status = _human(entry.assessmentStatus) ?? 'Status not reported';
     final time = entry.computedAt == null
         ? 'Time not reported'
         : DateFormat('d MMM yyyy, HH:mm').format(entry.computedAt!);
-    final trigger = entry.trigger == null ? 'Trigger not reported' : 'Trigger: ${entry.trigger}';
+    final assessmentId = entry.fusionResultId == null
+        ? 'Assessment ID unavailable'
+        : 'Assessment ${entry.fusionResultId}';
     final missing = entry.missingModalities.isEmpty
         ? null
         : 'Missing: ${entry.missingModalities.join(', ')}';
@@ -132,11 +176,20 @@ class _TimelineRow extends StatelessWidget {
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            Text('$tier · $score · $band', style: const TextStyle(fontWeight: FontWeight.w700)),
+            Text(
+              '$tier · $score · $band',
+              style: const TextStyle(fontWeight: FontWeight.w700),
+            ),
             const SizedBox(height: 4),
             Text(status),
             Text(time),
-            Text(trigger),
+            Text(assessmentId),
+            if (entry.forecastScore != null || entry.forecastTier != null)
+              Text(
+                '${entry.forecastScope ?? 'Scope unavailable'} forecast${entry.forecastHorizonMinutes == null ? '' : ' · ${entry.forecastHorizonMinutes} min'}: '
+                '${entry.forecastTier ?? 'Tier unavailable'} · '
+                '${entry.forecastScore?.toStringAsFixed(2) ?? '—'}',
+              ),
             if (missing != null) Text(missing),
           ],
         ),

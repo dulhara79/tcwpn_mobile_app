@@ -24,16 +24,13 @@ Use a clean source tree and the committed `pubspec.lock`.
 Required research/study values include:
 
 - `BACKEND_BASE`
-- `AUTH_BASE`
+- clinician credentials issued by the Central Backend; `AUTH_BASE` is unused
 - `APP_VERSION`
 - `BUILD_ENVIRONMENT`
 - `BUILD_REVISION`
 - `DEMO_DATA=false`
 
-For push, select either:
-
-- Primary Firebase client configuration; or
-- Secondary Firebase client configuration for the disaster-recovery build.
+The P0 AttentionEvent path uses foreground polling. Release push registration is disabled until the Central Backend publishes a verified device-token contract.
 
 Do not store passwords, service private keys, server credentials or signing secrets in the repository.
 
@@ -41,7 +38,7 @@ Do not store passwords, service private keys, server credentials or signing secr
 
 For any non-loopback environment:
 
-- backend/auth URLs must be HTTPS;
+- the Central Backend URL must be HTTPS;
 - Settings must identify the expected backend host/environment;
 - no secret is displayed;
 - local demo authentication must not be used with real participant data.
