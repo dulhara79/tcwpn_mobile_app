@@ -84,17 +84,22 @@ class ModalityStatus {
   bool get isExperimentalExcluded =>
       state == ModalityState.notValidated && includedInFusion == false;
 
-  factory ModalityStatus.fromJson(Map<String, dynamic> json) => ModalityStatus(
-        componentId: contractString(json['component_id']) ?? '',
-        score: contractDouble(json['score']),
-        available: contractBool(json['available']),
-        includedInFusion: contractBool(json['included_in_fusion']),
-        state: ModalityState.fromWire(json['status']),
-        confidence: contractDouble(json['confidence']),
-        coverage: contractDouble(json['coverage']),
-        capturedAt: contractDateTime(json['captured_at']),
-        contribution: contractDouble(json['contribution']),
-      );
+  factory ModalityStatus.fromJson(Map<String, dynamic> json) {
+    final state = ModalityState.fromWire(json['status']);
+    return ModalityStatus(
+      componentId: contractString(json['component_id']) ?? '',
+      score: contractDouble(json['score']),
+      available: state == ModalityState.ok
+          ? contractBool(json['available'])
+          : false,
+      includedInFusion: contractBool(json['included_in_fusion']),
+      state: state,
+      confidence: contractDouble(json['confidence']),
+      coverage: contractDouble(json['coverage']),
+      capturedAt: contractDateTime(json['captured_at']),
+      contribution: contractDouble(json['contribution']),
+    );
+  }
 }
 
 class AssessmentSummary {

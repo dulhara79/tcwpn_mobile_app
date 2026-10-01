@@ -9,7 +9,7 @@
     {
       "component_id": "c1_physiological",
       "score": 0.79,
-      "available": true,
+      "available": false,
       "included_in_fusion": false,
       "status": "stale",
       "confidence": 0.44,

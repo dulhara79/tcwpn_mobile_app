@@ -71,7 +71,20 @@ void main() {
     );
     expect(result.assessmentStatus, AssessmentStatus.partial);
     expect(c1.state, ModalityState.stale);
+    expect(c1.available, isFalse);
     expect(c1.includedInFusion, isFalse);
+  });
+
+  test('a contradictory stale reading cannot be treated as available', () {
+    final json = loadContractFixture('assessment_partial_stale_c1.json');
+    final c1 =
+        (json['modalities'] as List<dynamic>).first as Map<String, dynamic>;
+    c1['available'] = true;
+
+    final result = AssessmentSummary.fromJson(json);
+
+    expect(result.modalities.first.state, ModalityState.stale);
+    expect(result.modalities.first.available, isFalse);
   });
 
   test('unavailable C3 stays null instead of becoming zero', () {
