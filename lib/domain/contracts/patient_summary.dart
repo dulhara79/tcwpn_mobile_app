@@ -52,7 +52,8 @@ class PatientSummary {
   Map<String, dynamic> toJson() => {
         'subject_id': subjectId,
         'display_id': displayId,
-        'patient_name': patientName,
+        // Do not persist identifying patient names in the shared roster/
+        // dashboard caches. Names are displayed from a fresh assigned API read.
         'fusion_result_id': fusionResultId,
         'current_assessment': currentAssessment == null
             ? null
