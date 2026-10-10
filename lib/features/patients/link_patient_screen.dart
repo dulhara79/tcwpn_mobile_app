@@ -42,12 +42,14 @@ class _LinkPatientScreenState extends State<LinkPatientScreen> {
   Future<void> _scan() async {
     if (_busy) return;
     try {
-      final raw = await (widget.scanInvitation?.call(context) ??
-          Navigator.of(context).push<String>(
-            MaterialPageRoute(
-              builder: (_) => const ScanPatientInviteScreen(),
-            ),
-          ));
+      final scanner = widget.scanInvitation;
+      final raw = scanner != null
+          ? await scanner(context)
+          : await Navigator.of(context).push<String>(
+              MaterialPageRoute(
+                builder: (_) => const ScanPatientInviteScreen(),
+              ),
+            );
       if (!mounted || raw == null) return;
       final scanned = parsePatientInvitationQr(raw);
       if (scanned.kind != PatientQrKind.invitation) {
