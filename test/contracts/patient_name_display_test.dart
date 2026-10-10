@@ -13,7 +13,8 @@ void main() {
     final patient = PatientSummary.fromJson(row(patientName: '  Example Name  '));
     expect(patient.clinicianLabel, 'Example Name');
     expect(patient.subjectId, 'subject-test');
-    expect(patient.toJson()['patient_name'], '  Example Name  ');
+    expect(patient.toJson().containsKey('patient_name'), isFalse);
+    expect(PatientSummary.fromJson(patient.toJson()).clinicianLabel, 'Patient AB12CD34');
   });
 
   test('unset or revoked patient name preserves server pseudonym', () {
