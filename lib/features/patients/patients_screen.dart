@@ -55,7 +55,7 @@ class _PatientsScreenState extends State<PatientsScreen> {
       MaterialPageRoute(
         builder: (_) => PatientOverviewScreen.production(
           subjectId: patient.subjectId,
-          displayId: patient.displayId,
+          displayId: patient.clinicianLabel,
         ),
       ),
     );
@@ -149,7 +149,8 @@ class _PatientsScreenState extends State<PatientsScreen> {
           final matchesQuery =
               query.isEmpty ||
               patient.subjectId.toLowerCase().contains(query) ||
-              (patient.displayId ?? '').toLowerCase().contains(query);
+              (patient.displayId ?? '').toLowerCase().contains(query) ||
+              (patient.patientName ?? '').toLowerCase().contains(query);
           final matchesAttention =
               !_needsAttentionOnly ||
               attentionSubjects.contains(patient.subjectId);
@@ -332,7 +333,7 @@ class _AssignedPatientCard extends StatelessWidget {
             children: [
               Expanded(
                 child: Text(
-                  patient.displayId ?? patient.subjectId,
+                  patient.clinicianLabel,
                   style: const TextStyle(
                     fontSize: 15,
                     fontWeight: FontWeight.w700,
@@ -351,7 +352,7 @@ class _AssignedPatientCard extends StatelessWidget {
                 ),
             ],
           ),
-          if (patient.displayId != null) ...[
+          if (patient.displayId != null || patient.patientName != null) ...[
             const SizedBox(height: Ds.s1),
             Text(
               patient.subjectId,

@@ -5,6 +5,7 @@ import 'contract_parsing.dart';
 class PatientSummary {
   final String subjectId;
   final String? displayId;
+  final String? patientName;
   final int? fusionResultId;
   final CurrentAssessment? currentAssessment;
   final ForecastResult? forecast;
@@ -15,6 +16,7 @@ class PatientSummary {
   const PatientSummary({
     required this.subjectId,
     required this.displayId,
+    this.patientName,
     required this.fusionResultId,
     required this.currentAssessment,
     required this.forecast,
@@ -29,6 +31,7 @@ class PatientSummary {
     return PatientSummary(
       subjectId: contractString(json['subject_id']) ?? '',
       displayId: contractString(json['display_id']),
+      patientName: contractString(json['patient_name']),
       fusionResultId: contractInt(json['fusion_result_id']),
       currentAssessment:
           current == null ? null : CurrentAssessment.fromJson(current),
@@ -39,9 +42,17 @@ class PatientSummary {
     );
   }
 
+  /// The patient may revoke this optional name at any time. Fall back to the
+  /// backend pseudonym, never to a guessed identity.
+  String get clinicianLabel =>
+      patientName?.trim().isNotEmpty == true
+          ? patientName!.trim()
+          : (displayId?.trim().isNotEmpty == true ? displayId! : subjectId);
+
   Map<String, dynamic> toJson() => {
         'subject_id': subjectId,
         'display_id': displayId,
+        'patient_name': patientName,
         'fusion_result_id': fusionResultId,
         'current_assessment': currentAssessment == null
             ? null
