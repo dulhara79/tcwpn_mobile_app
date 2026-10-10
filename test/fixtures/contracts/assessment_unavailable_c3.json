@@ -1,7 +1,7 @@
 {
   "subject_id": "subject-003",
   "fusion_result_id": 125,
-  "current_assessment": {"score": null, "tier": null, "band": "GREY"},
+  "current_assessment": null,
   "forecast": null,
   "confidence": null,
   "assessment_status": "unavailable",

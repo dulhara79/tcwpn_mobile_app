@@ -87,12 +87,18 @@ class CentralBackendAssessmentRepository implements AssessmentRepository {
     final assessment = AssessmentSummary.fromJson(payload);
     final unavailable =
         assessment.assessmentStatus == AssessmentStatus.unavailable;
+    // A historical FusionResult can still exist when its source evidence has
+    // gone stale. The backend intentionally returns that row's ID for audit
+    // provenance while current_assessment is null. Preserve the reference,
+    // never re-label its historical risk score as current.
     final invalidUnavailable =
         unavailable &&
-        (assessment.fusionResultId != null ||
-            assessment.currentAssessment.score != null ||
+        (assessment.currentAssessment.score != null ||
             assessment.currentAssessment.tier != RiskTier.unknown ||
             assessment.currentAssessment.band != null);
+    final invalidFusionId =
+        assessment.fusionResultId != null &&
+        assessment.fusionResultId! <= 0;
     final invalidAssessment =
         !unavailable &&
         (assessment.fusionResultId == null ||
@@ -100,6 +106,7 @@ class CentralBackendAssessmentRepository implements AssessmentRepository {
             (assessment.modelVersion ?? '').trim().isEmpty);
     if (assessment.subjectId.trim() != id ||
         invalidUnavailable ||
+        invalidFusionId ||
         invalidAssessment) {
       throw ApiException(
         kind: ApiFailure.malformed,
