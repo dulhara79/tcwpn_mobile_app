@@ -49,7 +49,11 @@ class _PatientsScreenState extends State<PatientsScreen> {
   @override
   void initState() {
     super.initState();
-    widget.controller.addListener(_refreshLabels);
+    widget.controller.addListener(_onDashboardChanged);
+    WidgetsBinding.instance.addPostFrameCallback((_) => _refreshLabels());
+  }
+
+  void _onDashboardChanged() {
     WidgetsBinding.instance.addPostFrameCallback((_) => _refreshLabels());
   }
 
@@ -163,7 +167,7 @@ class _PatientsScreenState extends State<PatientsScreen> {
       }
       if (!mounted || !Session.isActive || Session.clinicianId != clinician) return;
       setState(() {
-        if (action == '__REMOVE__') {
+        if (action == '\u0001REMOVE') {
           _labels.remove(patient.subjectId);
         } else {
           _labels[patient.subjectId] = action;
@@ -180,7 +184,7 @@ class _PatientsScreenState extends State<PatientsScreen> {
 
   @override
   void dispose() {
-    widget.controller.removeListener(_refreshLabels);
+    widget.controller.removeListener(_onDashboardChanged);
     _search.dispose();
     super.dispose();
   }
