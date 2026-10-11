@@ -79,12 +79,14 @@ class _ServerDashboardScreenState extends State<ServerDashboardScreen> {
       }
       return;
     }
+    final clinicianId = clinician!;
+    final assigned = snapshot!.assignedPatients;
     try {
       final entries = await Future.wait(
-        snapshot.assignedPatients.map((patient) async => MapEntry(
+        assigned.map((patient) async => MapEntry(
           patient.subjectId,
           await _labelsStore.read(
-            clinicianId: clinician,
+            clinicianId: clinicianId,
             subjectId: patient.subjectId,
           ),
         )),
