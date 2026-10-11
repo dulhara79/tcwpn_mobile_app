@@ -134,7 +134,7 @@ class _PatientOverviewScreenState extends State<PatientOverviewScreen> {
         _ => 'Assessment unavailable',
       };
 
-      return EmptyState(
+      final empty = EmptyState(
         icon: state.status == AsyncDataStatus.offline
             ? Icons.cloud_off_rounded
             : Icons.monitor_heart_outlined,
@@ -145,6 +145,61 @@ class _PatientOverviewScreenState extends State<PatientOverviewScreen> {
         onAction: state.status == AsyncDataStatus.sessionExpired
             ? null
             : () => _controller.load(),
+      );
+
+      // Assessment availability is not clinician-note availability. Keep the
+      // independent note and historical-timeline workflows reachable after an
+      // unavailable/offline/malformed assessment; neither creates a risk score.
+      //
+      // Do not offer patient-specific workflows on a server authorization
+      // denial, expired session, or conflicting patient record. The note
+      // submission and timeline APIs still enforce backend assignment scope.
+      final clinicalWorkflowAvailable = switch (state.status) {
+        AsyncDataStatus.unavailable ||
+        AsyncDataStatus.empty ||
+        AsyncDataStatus.offline ||
+        AsyncDataStatus.error => true,
+        _ => false,
+      };
+      if (!clinicalWorkflowAvailable) return empty;
+
+      return ListView(
+        padding: const EdgeInsets.fromLTRB(Ds.s4, Ds.s4, Ds.s4, Ds.s10),
+        children: [
+          const SizedBox(height: Ds.s8),
+          empty,
+          const SizedBox(height: Ds.s4),
+          const SectionLabel('Clinical workflow'),
+          Panel(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                const Text(
+                  'A current multimodal assessment is unavailable. You can '
+                  'still work with device-local clinical note drafts. '
+                  'Submitting a note for analysis and loading timeline '
+                  'history require the Central Backend and clinician access.',
+                  style: TextStyle(
+                    fontSize: 12,
+                    height: 1.4,
+                    color: Ds.inkMuted,
+                  ),
+                ),
+                const SizedBox(height: Ds.s3),
+                TextButton.icon(
+                  onPressed: _openClinicalNotes,
+                  icon: const Icon(Icons.note_alt_outlined, size: 16),
+                  label: const Text('View clinical notes'),
+                ),
+                TextButton.icon(
+                  onPressed: _openTimeline,
+                  icon: const Icon(Icons.timeline_rounded, size: 16),
+                  label: const Text('View timeline'),
+                ),
+              ],
+            ),
+          ),
+        ],
       );
     }
 
