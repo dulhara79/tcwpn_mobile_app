@@ -44,6 +44,7 @@ class _PatientsScreenState extends State<PatientsScreen> {
       widget.labelStore ?? const SecurePatientLabelStore();
   final Map<String, String> _labels = {};
   String? _loadedForClinician;
+  String? _rosterKey;
 
   @override
   void initState() {
@@ -53,6 +54,7 @@ class _PatientsScreenState extends State<PatientsScreen> {
   }
 
   void _refreshLabels() {
+    if (!mounted) return;
     final snapshot = widget.controller.state.data;
     final clinician = Session.isActive ? Session.clinicianId : null;
     if (snapshot == null || snapshot.isFromCache ||
@@ -63,11 +65,15 @@ class _PatientsScreenState extends State<PatientsScreen> {
         setState(() {
           _labels.clear();
           _loadedForClinician = null;
+          _rosterKey = null;
         });
       }
       return;
     }
-    if (_loadedForClinician == clinician) return;
+    final ids = snapshot.assignedPatients.map((p) => p.subjectId).toList()..sort();
+    final rosterKey = '$clinician|${ids.join('|')}';
+    if (_rosterKey == rosterKey) return;
+    _rosterKey = rosterKey;
     _loadedForClinician = clinician;
     Future.wait(snapshot.assignedPatients.map((p) async =>
       MapEntry(p.subjectId, await _labelStore.read(
@@ -75,7 +81,7 @@ class _PatientsScreenState extends State<PatientsScreen> {
       )),
     )).then((entries) {
       if (!mounted || !Session.isActive ||
-          Session.clinicianId != clinician || _loadedForClinician != clinician) return;
+          Session.clinicianId != clinician || _loadedForClinician != clinician || _rosterKey != rosterKey) return;
       setState(() {
         _labels.clear();
         for (final e in entries) {
@@ -87,13 +93,15 @@ class _PatientsScreenState extends State<PatientsScreen> {
         setState(() {
           _labels.clear();
           _loadedForClinician = null;
+          _rosterKey = null;
         });
       }
     });
   }
 
   String _label(PatientSummary p) =>
-      (Session.isActive && Session.clinicianId == _loadedForClinician
+      (Session.isActive && Session.clinicianId == _loadedForClinician &&
+       widget.controller.state.data?.isFromCache == false
           ? _labels[p.subjectId] : null) ?? p.displayId ?? p.subjectId;
 
   Future<void> _editLabel(PatientSummary patient) async {
@@ -123,7 +131,7 @@ class _PatientsScreenState extends State<PatientsScreen> {
         actions: [
           if (_labels.containsKey(patient.subjectId))
             TextButton(
-              onPressed: () => Navigator.pop(ctx, '__REMOVE__'),
+              onPressed: () => Navigator.pop(ctx, '\u0001REMOVE'),
               child: const Text('Remove label'),
             ),
           TextButton(
@@ -147,7 +155,7 @@ class _PatientsScreenState extends State<PatientsScreen> {
         !(widget.controller.state.data?.assignedPatients.any(
            (p) => p.subjectId == patient.subjectId) ?? false)) return;
     try {
-      if (action == '__REMOVE__') {
+      if (action == '\u0001REMOVE') {
         await _labelStore.delete(clinicianId: clinician, subjectId: patient.subjectId);
       } else {
         await _labelStore.write(
