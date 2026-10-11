@@ -4,6 +4,8 @@ import 'package:intl/intl.dart';
 import '../../core/design/components.dart';
 import '../../core/design/theme.dart';
 import '../../core/design/tokens.dart';
+import '../../data/api/session.dart';
+import '../../data/local/patient_label_store.dart';
 import '../../domain/contracts/contract_enums.dart';
 import '../../domain/contracts/dashboard_snapshot.dart';
 import '../../domain/contracts/patient_summary.dart';
@@ -17,12 +19,14 @@ class PatientsScreen extends StatefulWidget {
   final DashboardController controller;
   final ValueChanged<PatientSummary>? onOpenPatient;
   final AssignmentInviteRepository? inviteRepository;
+  final PatientLabelStore? labelStore;
 
   const PatientsScreen({
     super.key,
     required this.controller,
     this.onOpenPatient,
     this.inviteRepository,
+    this.labelStore,
   });
 
   @override
@@ -36,9 +40,139 @@ class _PatientsScreenState extends State<PatientsScreen> {
   RiskTier? _forecastTier;
   AssessmentStatus? _assessmentStatus;
   bool _needsAttentionOnly = false;
+  late final PatientLabelStore _labelStore =
+      widget.labelStore ?? const SecurePatientLabelStore();
+  final Map<String, String> _labels = {};
+  String? _loadedForClinician;
+
+  @override
+  void initState() {
+    super.initState();
+    widget.controller.addListener(_refreshLabels);
+    WidgetsBinding.instance.addPostFrameCallback((_) => _refreshLabels());
+  }
+
+  void _refreshLabels() {
+    final snapshot = widget.controller.state.data;
+    final clinician = Session.isActive ? Session.clinicianId : null;
+    if (snapshot == null || snapshot.isFromCache ||
+        clinician == null || clinician.isEmpty ||
+        widget.controller.state.status == AsyncDataStatus.forbidden ||
+        widget.controller.state.status == AsyncDataStatus.sessionExpired) {
+      if (_labels.isNotEmpty || _loadedForClinician != null) {
+        setState(() {
+          _labels.clear();
+          _loadedForClinician = null;
+        });
+      }
+      return;
+    }
+    if (_loadedForClinician == clinician) return;
+    _loadedForClinician = clinician;
+    Future.wait(snapshot.assignedPatients.map((p) async =>
+      MapEntry(p.subjectId, await _labelStore.read(
+        clinicianId: clinician, subjectId: p.subjectId,
+      )),
+    )).then((entries) {
+      if (!mounted || !Session.isActive ||
+          Session.clinicianId != clinician || _loadedForClinician != clinician) return;
+      setState(() {
+        _labels.clear();
+        for (final e in entries) {
+          if (e.value?.isNotEmpty == true) _labels[e.key] = e.value!;
+        }
+      });
+    }).catchError((Object _) {
+      if (mounted && _loadedForClinician == clinician) {
+        setState(() {
+          _labels.clear();
+          _loadedForClinician = null;
+        });
+      }
+    });
+  }
+
+  String _label(PatientSummary p) =>
+      (Session.isActive && Session.clinicianId == _loadedForClinician
+          ? _labels[p.subjectId] : null) ?? p.displayId ?? p.subjectId;
+
+  Future<void> _editLabel(PatientSummary patient) async {
+    final clinician = Session.isActive ? Session.clinicianId : null;
+    final snapshot = widget.controller.state.data;
+    if (clinician == null || snapshot == null || snapshot.isFromCache ||
+        !snapshot.assignedPatients.any((p) => p.subjectId == patient.subjectId)) return;
+    final field = TextEditingController(text: _labels[patient.subjectId] ?? '');
+    final form = GlobalKey<FormState>();
+    final action = await showDialog<String>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: const Text('Edit patient label'),
+        content: Form(
+          key: form,
+          child: TextFormField(
+            controller: field,
+            maxLength: 80,
+            autofocus: true,
+            decoration: const InputDecoration(
+              labelText: 'Study-safe name or nickname',
+              helperText: 'Only on this clinician device',
+            ),
+            validator: PatientLabelStore.validateLabel,
+          ),
+        ),
+        actions: [
+          if (_labels.containsKey(patient.subjectId))
+            TextButton(
+              onPressed: () => Navigator.pop(ctx, '__REMOVE__'),
+              child: const Text('Remove label'),
+            ),
+          TextButton(
+            onPressed: () => Navigator.pop(ctx),
+            child: const Text('Cancel'),
+          ),
+          FilledButton(
+            onPressed: () {
+              if (form.currentState?.validate() == true) {
+                Navigator.pop(ctx, PatientLabelStore.normalizeLabel(field.text));
+              }
+            },
+            child: const Text('Save'),
+          ),
+        ],
+      ),
+    );
+    field.dispose();
+    if (!mounted || action == null || !Session.isActive ||
+        Session.clinicianId != clinician ||
+        !(widget.controller.state.data?.assignedPatients.any(
+           (p) => p.subjectId == patient.subjectId) ?? false)) return;
+    try {
+      if (action == '__REMOVE__') {
+        await _labelStore.delete(clinicianId: clinician, subjectId: patient.subjectId);
+      } else {
+        await _labelStore.write(
+          clinicianId: clinician, subjectId: patient.subjectId, label: action);
+      }
+      if (!mounted || !Session.isActive || Session.clinicianId != clinician) return;
+      setState(() {
+        if (action == '__REMOVE__') {
+          _labels.remove(patient.subjectId);
+        } else {
+          _labels[patient.subjectId] = action;
+        }
+      });
+    } catch (_) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
+          content: Text('Could not save this label securely.'),
+        ));
+      }
+    }
+  }
 
   @override
   void dispose() {
+    widget.controller.removeListener(_refreshLabels);
     _search.dispose();
     super.dispose();
   }
@@ -55,7 +189,7 @@ class _PatientsScreenState extends State<PatientsScreen> {
       MaterialPageRoute(
         builder: (_) => PatientOverviewScreen.production(
           subjectId: patient.subjectId,
-          displayId: patient.displayId,
+          displayId: _label(patient),
         ),
       ),
     );
@@ -149,7 +283,8 @@ class _PatientsScreenState extends State<PatientsScreen> {
           final matchesQuery =
               query.isEmpty ||
               patient.subjectId.toLowerCase().contains(query) ||
-              (patient.displayId ?? '').toLowerCase().contains(query);
+              (patient.displayId ?? '').toLowerCase().contains(query) ||
+              _label(patient).toLowerCase().contains(query);
           final matchesAttention =
               !_needsAttentionOnly ||
               attentionSubjects.contains(patient.subjectId);
@@ -267,6 +402,11 @@ class _PatientsScreenState extends State<PatientsScreen> {
                 padding: const EdgeInsets.only(bottom: Ds.s3),
                 child: _AssignedPatientCard(
                   patient: patient,
+                  label: _label(patient),
+                  onEdit: Session.isActive && !snapshot.isFromCache &&
+                          Session.clinicianId == _loadedForClinician
+                      ? () => _editLabel(patient)
+                      : null,
                   hasOpenAttention: attentionSubjects.contains(
                     patient.subjectId,
                   ),
@@ -306,11 +446,15 @@ class _PatientsScreenState extends State<PatientsScreen> {
 
 class _AssignedPatientCard extends StatelessWidget {
   final PatientSummary patient;
+  final String label;
+  final VoidCallback? onEdit;
   final bool hasOpenAttention;
   final VoidCallback onTap;
 
   const _AssignedPatientCard({
     required this.patient,
+    required this.label,
+    required this.onEdit,
     required this.hasOpenAttention,
     required this.onTap,
   });
@@ -332,7 +476,7 @@ class _AssignedPatientCard extends StatelessWidget {
             children: [
               Expanded(
                 child: Text(
-                  patient.displayId ?? patient.subjectId,
+                  label,
                   style: const TextStyle(
                     fontSize: 15,
                     fontWeight: FontWeight.w700,
@@ -340,6 +484,12 @@ class _AssignedPatientCard extends StatelessWidget {
                   ),
                 ),
               ),
+              if (onEdit != null)
+                IconButton(
+                  tooltip: 'Edit patient label',
+                  onPressed: onEdit,
+                  icon: const Icon(Icons.edit_outlined, size: 19),
+                ),
               if (hasOpenAttention)
                 const Text(
                   'OPEN attention event',
