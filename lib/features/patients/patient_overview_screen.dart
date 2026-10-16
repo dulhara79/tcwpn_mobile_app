@@ -10,6 +10,7 @@ import '../../domain/contracts/assessment_summary.dart';
 import '../../domain/contracts/contract_enums.dart';
 import '../../state/async_data_state.dart';
 import '../../state/patient_overview_controller.dart';
+import 'carex_explanation_screen.dart';
 import 'clinical_notes_screen.dart';
 import 'clinician_assessment_screen.dart';
 import 'data_quality_screen.dart';
@@ -32,6 +33,7 @@ class PatientOverviewScreen extends StatefulWidget {
   final ValueChanged<String>? onOpenTimeline;
   final OpenClinicalNotes? onOpenClinicalNotes;
   final ValueChanged<AssessmentSummary>? onOpenSupportingEvidence;
+  final ValueChanged<AssessmentSummary>? onOpenCarexExplanation;
   final ValueChanged<AssessmentSummary>? onOpenClinicianAssessment;
 
   const PatientOverviewScreen({
@@ -44,6 +46,7 @@ class PatientOverviewScreen extends StatefulWidget {
     this.onOpenTimeline,
     this.onOpenClinicalNotes,
     this.onOpenSupportingEvidence,
+    this.onOpenCarexExplanation,
     this.onOpenClinicianAssessment,
   }) : subjectId = null;
 
@@ -57,6 +60,7 @@ class PatientOverviewScreen extends StatefulWidget {
     this.onOpenTimeline,
     this.onOpenClinicalNotes,
     this.onOpenSupportingEvidence,
+    this.onOpenCarexExplanation,
     this.onOpenClinicianAssessment,
   }) : controller = null;
 
@@ -276,6 +280,12 @@ class _PatientOverviewScreenState extends State<PatientOverviewScreen> {
                     ),
                   ),
                   const SizedBox(height: Ds.s2),
+                  if (assessment.fusionResultId != null)
+                    TextButton.icon(
+                      onPressed: () => _openCarexExplanation(assessment),
+                      icon: const Icon(Icons.analytics_outlined, size: 16),
+                      label: const Text('CARE-X · Why this assessment?'),
+                    ),
                   TextButton.icon(
                     onPressed: () => _openSupportingEvidence(assessment),
                     icon: const Icon(Icons.menu_book_outlined, size: 16),
@@ -369,6 +379,25 @@ class _PatientOverviewScreenState extends State<PatientOverviewScreen> {
           clinicianId: Session.clinicianId ?? '',
           refreshCanonicalAssessment: () =>
               _controller.load(showLoading: false),
+          displayId: widget.displayId,
+        ),
+      ),
+    );
+  }
+
+  void _openCarexExplanation(AssessmentSummary assessment) {
+    final callback = widget.onOpenCarexExplanation;
+    if (callback != null) {
+      callback(assessment);
+      return;
+    }
+
+    Navigator.push(
+      context,
+      MaterialPageRoute(
+        builder: (_) => CarexExplanationScreen(
+          subjectId: assessment.subjectId,
+          fusionResultId: assessment.fusionResultId,
           displayId: widget.displayId,
         ),
       ),
