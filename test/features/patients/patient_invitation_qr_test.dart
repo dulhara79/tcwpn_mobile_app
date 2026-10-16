@@ -12,7 +12,7 @@ void main() {
   });
 
   test('explicit invitation deep link accepts same exact token', () {
-    final result = parsePatientInvitationQr('clinanx://invite/' + token);
+    final result = parsePatientInvitationQr('clinanx://invite/$token');
     expect(result.kind, PatientQrKind.invitation);
     expect(result.value, token);
   });
@@ -32,11 +32,11 @@ void main() {
     for (final data in [
       '',
       'aB_123-Z',
-      'https://example.org/claim/' + token,
-      'clinanx://invite/' + token + '?forward=true',
-      'clinanx://invite/' + token + '/unexpected',
-      'clinanx://unknown/' + token,
-      'clinanx://invite/' + token + '#fragment',
+      'https://example.org/claim/$token',
+      'clinanx://invite/$token?forward=true',
+      'clinanx://invite/$token/unexpected',
+      'clinanx://unknown/$token',
+      'clinanx://invite/$token#fragment',
       'P_0123456789ABCDEG',
       'x' * 513,
     ]) {

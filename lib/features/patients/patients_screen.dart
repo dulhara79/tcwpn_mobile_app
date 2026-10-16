@@ -85,7 +85,9 @@ class _PatientsScreenState extends State<PatientsScreen> {
       )),
     )).then((entries) {
       if (!mounted || !Session.isActive ||
-          Session.clinicianId != clinician || _loadedForClinician != clinician || _rosterKey != rosterKey) return;
+          Session.clinicianId != clinician || _loadedForClinician != clinician || _rosterKey != rosterKey) {
+        return;
+      }
       setState(() {
         _labels.clear();
         for (final e in entries) {
@@ -112,7 +114,9 @@ class _PatientsScreenState extends State<PatientsScreen> {
     final clinician = Session.isActive ? Session.clinicianId : null;
     final snapshot = widget.controller.state.data;
     if (clinician == null || snapshot == null || snapshot.isFromCache ||
-        !snapshot.assignedPatients.any((p) => p.subjectId == patient.subjectId)) return;
+        !snapshot.assignedPatients.any((p) => p.subjectId == patient.subjectId)) {
+      return;
+    }
     final field = TextEditingController(text: _labels[patient.subjectId] ?? '');
     final form = GlobalKey<FormState>();
     final action = await showDialog<String>(
@@ -157,7 +161,9 @@ class _PatientsScreenState extends State<PatientsScreen> {
     if (!mounted || action == null || !Session.isActive ||
         Session.clinicianId != clinician ||
         !(widget.controller.state.data?.assignedPatients.any(
-           (p) => p.subjectId == patient.subjectId) ?? false)) return;
+           (p) => p.subjectId == patient.subjectId) ?? false)) {
+      return;
+    }
     try {
       if (action == '\u0001REMOVE') {
         await _labelStore.delete(clinicianId: clinician, subjectId: patient.subjectId);

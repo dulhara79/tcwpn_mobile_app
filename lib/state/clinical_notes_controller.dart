@@ -123,8 +123,24 @@ class ClinicalNotesController extends ChangeNotifier {
             : null,
       );
       _notes = _notes.map((n) => n.id == noteId ? analysed : n).toList();
-      await _persist(notify: false);
-      await refreshCanonicalAssessment();
+
+      // POST /v1/clinical-notes has already been acknowledged at this point.
+      // Failure of local persistence or of a subsequent dashboard GET is not
+      // evidence that submission failed; marking it failed invites duplicate
+      // clinician notes on retry.
+      try {
+        await _persist(notify: false);
+      } catch (_) {
+        _message = 'The backend accepted the clinical note, but its local '
+            'copy could not be updated. Do not resubmit merely to refresh.';
+      }
+      try {
+        await refreshCanonicalAssessment();
+      } catch (_) {
+        _message = 'Clinical note accepted by the backend. The latest '
+            'assessment could not refresh; reopen the patient to retry '
+            'the read without sending another clinical note.';
+      }
     } on ApiException catch (error) {
       await _markFailed(noteId, error.message);
     } catch (_) {

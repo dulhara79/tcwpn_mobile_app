@@ -131,6 +131,29 @@ void main() {
     expect(c.notes.single.status, ClinicalNoteStatus.analysisFailed);
   });
 
+  test('successful C3 submission stays analysed when dashboard refresh fails',
+      () async {
+    final repo = _NotesRepository();
+    var refreshCount = 0;
+    final c = controller(repo, refresh: () async {
+      refreshCount++;
+      throw const ApiException(kind: ApiFailure.offline);
+    });
+    await c.load();
+    await c.saveDraft(text: 'Real C3 test note', noteType: 'Psychiatry note');
+
+    await c.submit('note-001');
+
+    expect(refreshCount, 1);
+    expect(repo.submittedSubject, 'subject-001');
+    expect(c.notes.single.status, ClinicalNoteStatus.analysed);
+    expect(c.notes.single.result?.riskScore, 0.67);
+    expect(repo.stored.single.status, ClinicalNoteStatus.analysed);
+    expect(c.message, contains('accepted by the backend'));
+    expect(c.message, contains('without sending another clinical note'));
+    expect(c.submittingNoteId, isNull);
+  });
+
   test('failed submission preserves note text and marks analysis failed', () async {
     final repo = _NotesRepository()
       ..failure = const ApiException(kind: ApiFailure.offline);
