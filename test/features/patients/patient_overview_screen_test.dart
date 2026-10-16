@@ -104,6 +104,7 @@ Future<_OverviewHarness> _pumpOverview(
   AssessmentSummary? assessment, {
   ValueChanged<AssessmentSummary>? onOpenSignalsContributions,
   ValueChanged<AssessmentSummary>? onOpenDataQuality,
+  ValueChanged<AssessmentSummary>? onOpenCarexExplanation,
   ValueChanged<String>? onOpenTimeline,
   void Function(String subjectId, String localRecordId)? onOpenClinicalNotes,
   String localRecordId = 'MRN-001',
@@ -123,6 +124,7 @@ Future<_OverviewHarness> _pumpOverview(
         controller: controller,
         onOpenSignalsContributions: onOpenSignalsContributions,
         onOpenDataQuality: onOpenDataQuality,
+        onOpenCarexExplanation: onOpenCarexExplanation,
         onOpenTimeline: onOpenTimeline,
         onOpenClinicalNotes: onOpenClinicalNotes,
       ),
@@ -151,6 +153,23 @@ void main() {
       tester.getTopLeft(find.text('ACUTE ESCALATION FORECAST')).dy,
       lessThan(tester.getTopLeft(find.text('CURRENT MULTIMODAL ASSESSMENT')).dy),
     );
+  });
+
+  testWidgets('CARE-X uses the canonical fusion row and preserves RAG button',
+      (tester) async {
+    AssessmentSummary? viewed;
+    await _pumpOverview(
+      tester,
+      _completeAssessment(),
+      onOpenCarexExplanation: (assessment) => viewed = assessment,
+    );
+    await _scrollTo(tester, 'CARE-X · Why this assessment?');
+    expect(find.text('View supporting evidence'), findsOneWidget);
+    await tester.tap(find.text('CARE-X · Why this assessment?'));
+    await tester.pump();
+
+    expect(viewed?.subjectId, 'subject-001');
+    expect(viewed?.fusionResultId, 123);
   });
 
   testWidgets('labels physiological forecast without claiming multimodal scope',
