@@ -62,7 +62,7 @@ class _CarexExplanationScreenState extends State<CarexExplanationScreen> {
   void dispose() {
     if (widget.repository == null &&
         _repository is CentralBackendCarexExplanationRepository) {
-      (_repository as CentralBackendCarexExplanationRepository).dispose();
+      _repository.dispose();
     }
     super.dispose();
   }
