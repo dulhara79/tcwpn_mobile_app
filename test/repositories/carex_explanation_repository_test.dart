@@ -66,8 +66,8 @@ void main() {
         return http.Response('{}', 200);
       }),
     );
-    await expectLater(
-      CentralBackendCarexExplanationRepository(api).explanation('  '),
+    expect(
+      () => CentralBackendCarexExplanationRepository(api).explanation('  '),
       throwsArgumentError,
     );
     expect(calls, 0);
