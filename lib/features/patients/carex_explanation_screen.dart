@@ -104,6 +104,7 @@ class _CarexExplanationScreenState extends State<CarexExplanationScreen> {
     final provenance = _map(result['weight_provenance']);
     final counterfactuals = _map(result['counterfactuals']);
     final reliability = _map(result['reliability_audit']);
+    final inflation = _map(result['weight_inflation']);
     final sufficiency = _map(result['sufficiency']);
     final ledger = _map(result['honesty_ledger']);
 
@@ -183,6 +184,17 @@ class _CarexExplanationScreenState extends State<CarexExplanationScreen> {
                       'tier: ${_value(row['tier_without'])}.',
             ),
           ),
+          ..._rows(counterfactuals['tier_flip_points']).map(
+            (row) => _Section(
+              title: '${_value(row['label'])} → ${_value(row['target_tier'])}',
+              body: row['reachable'] == true
+                  ? 'Threshold reachable at harmonised score '
+                      '${_value(row['harmonised_value_required'])}, '
+                      'holding other scores and the usable set fixed.'
+                  : 'Not reachable by changing this harmonised score alone '
+                      'with other scores and eligibility held fixed.',
+            ),
+          ),
           if (counterfactuals['thresholds_authoritative'] == false)
             const _Section(
               title: 'Threshold warning',
@@ -190,11 +202,30 @@ class _CarexExplanationScreenState extends State<CarexExplanationScreen> {
             ),
           const SizedBox(height: Ds.s4),
           const SectionLabel('L4 · Reliability & sufficiency'),
+          if (inflation['quantified'] != true)
+            _Section(
+              title: 'Weight inflation not quantified',
+              body: _value(inflation['unavailable_reason']),
+            ),
+          ..._rows(inflation['per_modality']).map(
+            (row) => _Section(
+              title: 'Weight audit: ${_value(row['label'])}',
+              body: _value(row['interpretation']),
+            ),
+          ),
           ..._rows(reliability['findings']).map(
             (row) => _Section(
               title: _value(row['label'] ?? row['modality']),
               body: '${_value(row['verdict'])}: '
                   '${_value(row['interpretation'])}',
+            ),
+          ),
+          ..._rows(sufficiency['per_modality']).map(
+            (row) => _Section(
+              title: 'Decision relevance: ${_value(row['label'])}',
+              body: 'Necessary: ${_value(row['necessary'])}; '
+                  'alone sufficient: ${_value(row['alone_sufficient'])}; '
+                  'decision relevant: ${_value(row['decision_relevant'])}.',
             ),
           ),
           _Section(
