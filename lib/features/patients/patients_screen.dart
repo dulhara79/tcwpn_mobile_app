@@ -172,6 +172,7 @@ class _PatientsScreenState extends State<PatientsScreen> {
           clinicianId: clinician, subjectId: patient.subjectId, label: action);
       }
       if (!mounted || !Session.isActive || Session.clinicianId != clinician) return;
+      PatientLabelStore.notifyChanged();
       setState(() {
         if (action == '\u0001REMOVE') {
           _labels.remove(patient.subjectId);

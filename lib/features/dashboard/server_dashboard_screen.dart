@@ -3,6 +3,8 @@ import 'package:flutter/material.dart';
 import '../../core/design/components.dart';
 import '../../core/design/theme.dart';
 import '../../core/design/tokens.dart';
+import '../../data/api/session.dart';
+import '../../data/local/patient_label_store.dart';
 import '../../domain/contracts/attention_event.dart';
 import '../../domain/contracts/contract_enums.dart';
 import '../../domain/contracts/patient_summary.dart';
@@ -11,20 +13,117 @@ import '../../state/dashboard_controller.dart';
 import '../attention_events/attention_event_detail_screen.dart';
 import '../patients/patient_overview_screen.dart';
 
-class ServerDashboardScreen extends StatelessWidget {
+class ServerDashboardScreen extends StatefulWidget {
   final DashboardController controller;
   final ValueChanged<PatientSummary>? onOpenPatient;
   final ValueChanged<AttentionEvent>? onOpenEvent;
+  final PatientLabelStore? labelStore;
 
   const ServerDashboardScreen({
     super.key,
     required this.controller,
     this.onOpenPatient,
     this.onOpenEvent,
+    this.labelStore,
   });
 
+  @override
+  State<ServerDashboardScreen> createState() => _ServerDashboardScreenState();
+}
+
+class _ServerDashboardScreenState extends State<ServerDashboardScreen> {
+  late final PatientLabelStore _labelsStore =
+      widget.labelStore ?? const SecurePatientLabelStore();
+  final Map<String, String> _labels = {};
+  String? _scope;
+  int _generation = 0;
+
+  @override
+  void initState() {
+    super.initState();
+    widget.controller.addListener(_scheduleReload);
+    PatientLabelStore.changes.addListener(_scheduleReload);
+    WidgetsBinding.instance.addPostFrameCallback((_) => _reload());
+  }
+
+  @override
+  void didUpdateWidget(covariant ServerDashboardScreen oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (oldWidget.controller != widget.controller) {
+      oldWidget.controller.removeListener(_scheduleReload);
+      widget.controller.addListener(_scheduleReload);
+      _scheduleReload();
+    }
+  }
+
+  void _scheduleReload() {
+    WidgetsBinding.instance.addPostFrameCallback((_) => _reload());
+  }
+
+  Future<void> _reload() async {
+    if (!mounted) return;
+    final generation = ++_generation;
+    final state = widget.controller.state;
+    final snapshot = state.data;
+    final clinician = Session.isActive ? Session.clinicianId : null;
+    final allowed = clinician != null && clinician.isNotEmpty &&
+        snapshot != null && !snapshot.isFromCache &&
+        state.status != AsyncDataStatus.offline &&
+        state.status != AsyncDataStatus.sessionExpired &&
+        state.status != AsyncDataStatus.forbidden &&
+        state.status != AsyncDataStatus.conflict;
+
+    if (!allowed) {
+      if (_labels.isNotEmpty || _scope != null) {
+        setState(() { _labels.clear(); _scope = null; });
+      }
+      return;
+    }
+    final clinicianId = clinician!;
+    final assigned = snapshot!.assignedPatients;
+    try {
+      final entries = await Future.wait(
+        assigned.map((patient) async => MapEntry(
+          patient.subjectId,
+          await _labelsStore.read(
+            clinicianId: clinicianId,
+            subjectId: patient.subjectId,
+          ),
+        )),
+      );
+      if (!mounted || generation != _generation || !Session.isActive ||
+          Session.clinicianId != clinician ||
+          widget.controller.state.data?.isFromCache != false) return;
+      setState(() {
+        _scope = clinician;
+        _labels.clear();
+        for (final e in entries) {
+          if (e.value?.isNotEmpty == true) _labels[e.key] = e.value!;
+        }
+      });
+    } catch (_) {
+      if (mounted && generation == _generation) {
+        setState(() { _labels.clear(); _scope = null; });
+      }
+    }
+  }
+
+  String _label(String subjectId, String fallback) {
+    if (!Session.isActive || Session.clinicianId != _scope ||
+        widget.controller.state.data?.isFromCache != false) return fallback;
+    return _labels[subjectId] ?? fallback;
+  }
+
+  @override
+  void dispose() {
+    _generation++;
+    widget.controller.removeListener(_scheduleReload);
+    PatientLabelStore.changes.removeListener(_scheduleReload);
+    super.dispose();
+  }
+
   void _openPatient(BuildContext context, PatientSummary patient) {
-    final callback = onOpenPatient;
+    final callback = widget.onOpenPatient;
     if (callback != null) {
       callback(patient);
       return;
@@ -34,14 +133,14 @@ class ServerDashboardScreen extends StatelessWidget {
       MaterialPageRoute(
         builder: (_) => PatientOverviewScreen.production(
           subjectId: patient.subjectId,
-          displayId: patient.displayId,
+          displayId: _label(patient.subjectId, patient.displayId ?? patient.subjectId),
         ),
       ),
     );
   }
 
   void _openEvent(BuildContext context, AttentionEvent event) {
-    final callback = onOpenEvent;
+    final callback = widget.onOpenEvent;
     if (callback != null) {
       callback(event);
       return;
@@ -57,9 +156,9 @@ class ServerDashboardScreen extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return AnimatedBuilder(
-      animation: controller,
+      animation: widget.controller,
       builder: (context, _) {
-        final state = controller.state;
+        final state = widget.controller.state;
         if (state.status == AsyncDataStatus.loading) {
           return const Center(child: CircularProgressIndicator());
         }
@@ -69,12 +168,12 @@ class ServerDashboardScreen extends StatelessWidget {
           return _NoDashboardData(
             status: state.status,
             message: state.message,
-            onRetry: controller.load,
+            onRetry: widget.controller.load,
           );
         }
 
         return RefreshIndicator(
-          onRefresh: () => controller.load(showLoading: false),
+          onRefresh: () => widget.controller.load(showLoading: false),
           child: ListView(
             padding: const EdgeInsets.all(Ds.s4),
             children: [
@@ -115,6 +214,7 @@ class ServerDashboardScreen extends StatelessWidget {
                 ...snapshot.openEvents.map(
                   (event) => _AttentionEventCard(
                     event,
+                    patientLabel: _label(event.subjectId, 'Patient ${event.subjectId}'),
                     onTap: () => _openEvent(context, event),
                   ),
                 ),
@@ -131,6 +231,7 @@ class ServerDashboardScreen extends StatelessWidget {
                 ...snapshot.assignedPatients.map(
                   (patient) => _PatientSummaryCard(
                     patient,
+                    displayLabel: _label(patient.subjectId, patient.displayId ?? patient.subjectId),
                     onTap: () => _openPatient(context, patient),
                   ),
                 ),
@@ -182,9 +283,10 @@ class _NoDashboardData extends StatelessWidget {
 
 class _AttentionEventCard extends StatelessWidget {
   final AttentionEvent event;
+  final String patientLabel;
   final VoidCallback onTap;
 
-  const _AttentionEventCard(this.event, {required this.onTap});
+  const _AttentionEventCard(this.event, {required this.onTap, required this.patientLabel});
 
   @override
   Widget build(BuildContext context) {
@@ -218,7 +320,7 @@ class _AttentionEventCard extends StatelessWidget {
             ),
             const SizedBox(height: Ds.s2),
             Text(
-              'Patient ${event.subjectId}',
+              patientLabel,
               style: const TextStyle(fontSize: 13, color: Ds.inkMuted),
             ),
             if (reason != null && reason.isNotEmpty) ...[
@@ -241,11 +343,13 @@ class _AttentionEventCard extends StatelessWidget {
 
 class _PatientSummaryCard extends StatelessWidget {
   final PatientSummary patient;
+  final String displayLabel;
   final VoidCallback onTap;
 
   const _PatientSummaryCard(
     this.patient, {
     required this.onTap,
+    required this.displayLabel,
   });
 
   @override
@@ -266,7 +370,7 @@ class _PatientSummaryCard extends StatelessWidget {
               children: [
                 Expanded(
                   child: Text(
-                    patient.displayId ?? patient.subjectId,
+                    displayLabel,
                     style: const TextStyle(
                       fontSize: 15,
                       fontWeight: FontWeight.w700,

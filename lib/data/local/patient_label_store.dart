@@ -1,10 +1,19 @@
 import 'dart:convert';
 
+import 'package:flutter/foundation.dart';
+
 import 'package:crypto/crypto.dart';
 import 'package:flutter_secure_storage/flutter_secure_storage.dart';
 
 /// A clinician-entered display label, not an identity key or risk signal.
 abstract class PatientLabelStore {
+  /// In-memory invalidation only. Names and identifiers are never published.
+  static final ValueNotifier<int> changes = ValueNotifier<int>(0);
+
+  static void notifyChanged() {
+    changes.value += 1;
+  }
+
   Future<String?> read({
     required String clinicianId,
     required String subjectId,
