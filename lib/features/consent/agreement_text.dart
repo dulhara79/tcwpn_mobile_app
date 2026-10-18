@@ -1,20 +1,10 @@
 // lib/features/consent/agreement_text.dart
 //
 // ─────────────────────────────────────────────────────────────────────────────
-// BEFORE DEPLOYMENT
-//
-// Every [BRACKETED] item must be completed, and the finished text must be
-// reviewed and signed off by:
-//   • the SLIIT Faculty of Computing legal/compliance contact,
-//   • the NHSL Ethics Review Committee, and
-//   • whoever is named as Data Protection Officer below.
-//
-// This is a competent working draft, not legal advice, and it has not been
-// reviewed by a lawyer. Do not deploy it unreviewed to a hospital.
-//
-// If you change ANY character of the text below, bump `kAgreementVersion` in
-// lib/domain/consent.dart. The stored SHA-256 anchor depends on it, and every
-// user will be required to accept again.
+// BEFORE DEPLOYMENT: This is a draft for institutional legal/ethics review.
+// No ethics reference, DPO, retention period, processor agreement, or investigator contact is confirmed by the supplied sources.
+// Never treat pending fields as an approval or signed institutional agreement.
+// Update the consent version on every text change before distribution.
 // ─────────────────────────────────────────────────────────────────────────────
 
 const String kTermsOfUse = '''
@@ -31,7 +21,7 @@ before you tap "I agree". If you do not accept them, do not use this software.
      Digital Biomarker Framework for Personalized Vulnerability Mapping and
      Acute Escalation Forecasting in Young Adults with Anxiety Disorders".
 
-1.2  It is provided by the Sri Lanka Institute of Information Technology
+1.2  This prototype is developed in an academic research context involving the Sri Lanka Institute of Information Technology
      ("SLIIT") together with the National Hospital of Sri Lanka ("NHSL")
      (together, "the Providers", "we", "us").
 
@@ -53,7 +43,7 @@ before you tap "I agree". If you do not accept them, do not use this software.
      (b) you have been issued credentials for your own individual use;
      (c) you have completed any training the Providers require; and
      (d) you are acting within the scope of the NHSL Ethics Review Committee
-         approval for study R26-DS-012 [ERC REFERENCE NUMBER].
+         approval for study R26-DS-012 (reference not yet verified; study use requires documentary approval).
 
 2.2  Credentials are personal. You must not share them, and you are responsible
      for everything done using your credentials.
@@ -151,7 +141,7 @@ before you tap "I agree". If you do not accept them, do not use this software.
 7.3  Subject to clause 7.1, our total aggregate liability arising out of or in
      connection with these Terms and your use of ClinAnx, whether in contract,
      tort (including negligence), breach of statutory duty or otherwise, is
-     limited to [SLR 25,000.00] or the amount you paid to use ClinAnx (which is
+     limited to the amount specified in a reviewed, signed institutional agreement (not yet confirmed) or the amount you paid to use ClinAnx (which is
      nil), whichever is greater.
 
 7.4  You acknowledge that ClinAnx is supplied free of charge for research and
@@ -190,7 +180,7 @@ before you tap "I agree". If you do not accept them, do not use this software.
 
 12. CONTACT
 
-     Principal Investigator: [NAME], [E-MAIL], [TELEPHONE]
+     Study contact: R26-DS-012 research team (Dulhara, Senuvi, Dewdu, Uvindu).\n     Institutional investigator contact details: pending written confirmation.
      SLIIT Faculty of Computing, New Kandy Road, Malabe, Sri Lanka
 ''';
 
@@ -201,11 +191,11 @@ Version $kAgreementVersionInline · Effective $kEffectiveDateInline
 
 1. WHO CONTROLS YOUR DATA
 
-1.1  SLIIT and NHSL are JOINT CONTROLLERS of personal data processed through
+1.1  The allocation of data-controller responsibilities for
      ClinAnx, within the meaning of the Personal Data Protection Act, No. 9 of
      2022 ("PDPA").
 
-1.2  Allocation of responsibility between them:
+1.2  Proposed operational responsibilities, subject to written approval:
      (a) NHSL is responsible for the lawfulness of patient care records, for
          patient-facing consent, and for clinical governance.
      (b) SLIIT is responsible for the application, the models, the inference
@@ -214,7 +204,7 @@ Version $kAgreementVersionInline · Effective $kEffectiveDateInline
      (c) SLIIT is the point of contact for exercising your rights. You may
          nevertheless exercise your rights against either controller.
 
-1.3  Data Protection Officer: [NAME], [E-MAIL], [TELEPHONE].
+1.3  Data Protection Officer contact: pending institutional confirmation.
 
 2. WHAT WE PROCESS
 
@@ -232,7 +222,7 @@ Version $kAgreementVersionInline · Effective $kEffectiveDateInline
 
 2.3  Patient data is processed under the separate written informed consent
      obtained from each patient by NHSL under Ethics Review Committee approval
-     [ERC REFERENCE NUMBER]. ClinAnx does not obtain patient consent. Do not
+     (reference not yet verified; study use requires documentary approval). ClinAnx does not obtain patient consent. Do not
      enter data for any patient who has not consented on paper.
 
 3. WHY WE PROCESS IT, AND ON WHAT BASIS
@@ -253,16 +243,16 @@ Version $kAgreementVersionInline · Effective $kEffectiveDateInline
 
 4.1  Clinical note text and derived model inputs are transmitted to machine-
      learning inference services hosted OUTSIDE SRI LANKA, currently on Hugging
-     Face infrastructure located in [JURISDICTION].
+     Face infrastructure located in (hosting jurisdiction not independently verified).
 
 4.2  This means your submissions are processed in a country whose data
      protection regime may differ from Sri Lanka's, and may be subject to lawful
      access requests by authorities in that country.
 
 4.3  Safeguards in place: transmission over TLS; a written processing agreement
-     with the hosting provider [CONFIRM EXECUTED]; a requirement that no direct
+     with the hosting provider (agreement status not verified); a requirement that no direct
      identifiers are transmitted (clause 4 of the Terms of Use); and retention
-     limits on the inference service [CONFIRM CONFIGURED].
+     limits on the inference service (configuration not verified).
 
 4.4  THE EFFECTIVENESS OF THESE SAFEGUARDS DEPENDS ON YOU DE-IDENTIFYING NOTES
      BEFORE SUBMISSION. ClinAnx cannot do this for you and cannot detect a
@@ -284,7 +274,7 @@ Version $kAgreementVersionInline · Effective $kEffectiveDateInline
      application. Deleting a patient purges every record in every namespace for
      that MRN.
 
-6.2  Research data: [RETENTION PERIOD, e.g. five years] from the end of the
+6.2  Research data: the retention period formally approved in the study protocol (not yet verified) from the end of the
      study, as required by the ethics approval, then destroyed or irreversibly
      anonymised.
 
@@ -316,7 +306,7 @@ Version $kAgreementVersionInline · Effective $kEffectiveDateInline
      restrict processing; withdraw consent; and complain.
 
      To exercise a right, contact the Data Protection Officer at section 1.3. We
-     will respond within [21] days.
+     will respond within the period required under applicable law and institutional policy.
 
 10. WITHDRAWING
 
@@ -351,5 +341,5 @@ Version $kAgreementVersionInline · Effective $kEffectiveDateInline
 
 // Interpolation shims so the version and date appear inside the text bodies and
 // are therefore covered by the SHA-256 anchor.
-const String kAgreementVersionInline = '1.0.0';
-const String kEffectiveDateInline = '1 August 2026';
+const String kAgreementVersionInline = '1.1.0';
+const String kEffectiveDateInline = '18 October 2026';
