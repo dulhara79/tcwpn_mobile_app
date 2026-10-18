@@ -162,7 +162,13 @@ class _ServerDashboardScreenState extends State<ServerDashboardScreen> {
 
   @override
   Widget build(BuildContext context) {
-    return AnimatedBuilder(
+    // AppShell has no AppBar for this tab. Respect the system status-bar
+    // inset (including camera cutouts) instead of using a fixed top margin.
+    // Keep the bottom inset owned by AppShell's NavigationBar.
+    return SafeArea(
+      top: true,
+      bottom: false,
+      child: AnimatedBuilder(
       animation: widget.controller,
       builder: (context, _) {
         final state = widget.controller.state;
@@ -345,6 +351,7 @@ class _ServerDashboardScreenState extends State<ServerDashboardScreen> {
           ),
         );
       },
+      ),
     );
   }
 }
