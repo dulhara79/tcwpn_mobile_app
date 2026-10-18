@@ -20,10 +20,10 @@ import 'package:crypto/crypto.dart';
 
 /// Bumping this forces every user to accept again on next launch.
 /// Never edit published agreement text without bumping this.
-const String kAgreementVersion = '1.0.0';
+const String kAgreementVersion = '1.1.0';
 
 /// When the current version was published. Shown in the viewer.
-const String kAgreementEffectiveDate = '1 August 2026';
+const String kAgreementEffectiveDate = '18 October 2026';
 
 class ConsentRecord {
   final String agreementVersion;

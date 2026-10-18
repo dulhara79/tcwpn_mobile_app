@@ -6,6 +6,9 @@ import '../../core/design/theme.dart';
 import '../../core/design/tokens.dart';
 import '../../data/api/session.dart';
 import '../../data/local/patient_label_store.dart';
+import '../../data/api/api_client.dart';
+import '../../data/repositories/patient_unassignment_repository.dart';
+import '../../domain/repositories/patient_unassignment_repository.dart';
 import '../../domain/contracts/contract_enums.dart';
 import '../../domain/contracts/dashboard_snapshot.dart';
 import '../../domain/contracts/patient_summary.dart';
@@ -20,6 +23,7 @@ class PatientsScreen extends StatefulWidget {
   final ValueChanged<PatientSummary>? onOpenPatient;
   final AssignmentInviteRepository? inviteRepository;
   final PatientLabelStore? labelStore;
+  final PatientUnassignmentRepository? unassignmentRepository;
 
   const PatientsScreen({
     super.key,
@@ -27,6 +31,7 @@ class PatientsScreen extends StatefulWidget {
     this.onOpenPatient,
     this.inviteRepository,
     this.labelStore,
+    this.unassignmentRepository,
   });
 
   @override
@@ -43,6 +48,9 @@ class _PatientsScreenState extends State<PatientsScreen> {
   late final PatientLabelStore _labelStore =
       widget.labelStore ?? const SecurePatientLabelStore();
   final Map<String, String> _labels = {};
+  late final PatientUnassignmentRepository _unassignmentRepository =
+      widget.unassignmentRepository ?? CentralBackendPatientUnassignmentRepository();
+  String? _removingSubjectId;
   String? _loadedForClinician;
   String? _rosterKey;
 
@@ -185,6 +193,85 @@ class _PatientsScreenState extends State<PatientsScreen> {
           content: Text('Could not save this label securely.'),
         ));
       }
+    }
+  }
+
+  Future<void> _removePatient(PatientSummary patient) async {
+    final clinician = Session.isActive ? Session.clinicianId : null;
+    final snapshot = widget.controller.state.data;
+    if (_removingSubjectId != null || clinician == null ||
+        snapshot == null || snapshot.isFromCache ||
+        !snapshot.assignedPatients.any((p) => p.subjectId == patient.subjectId)) {
+      return;
+    }
+    final name = _label(patient);
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (dialog) => AlertDialog(
+        title: const Text('Remove from my patients?'),
+        content: Text(
+          'Remove "$name" from your assigned patient list? '
+          'This revokes your access to this patient on the Central Backend. '
+          'It does NOT delete the patient, medical records, or assessment history. '
+          'To link again, the patient must issue a new invitation. '
+          'Unresolved attention events must be handled first.',
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(dialog, false),
+            child: const Text('Cancel'),
+          ),
+          FilledButton(
+            onPressed: () => Navigator.pop(dialog, true),
+            child: const Text('Remove patient'),
+          ),
+        ],
+      ),
+    );
+    if (confirmed != true || !mounted || !Session.isActive ||
+        Session.clinicianId != clinician ||
+        widget.controller.state.data?.isFromCache != false ||
+        !(widget.controller.state.data?.assignedPatients.any(
+          (p) => p.subjectId == patient.subjectId) ?? false)) return;
+    setState(() => _removingSubjectId = patient.subjectId);
+    try {
+      await _unassignmentRepository.unassign(patient.subjectId);
+      // This is not a local-only deletion: refresh the server-owned roster.
+      if (!mounted || !Session.isActive ||
+          Session.clinicianId != clinician) return;
+      try {
+        await _labelStore.delete(
+          clinicianId: clinician, subjectId: patient.subjectId);
+        _labels.remove(patient.subjectId);
+      } catch (_) {
+        // Do not misreport backend success as failure due to local cleanup.
+      }
+      await widget.controller.load(showLoading: false);
+      if (!mounted) return;
+      final stillAssigned = widget.controller.state.data?.assignedPatients.any(
+        (p) => p.subjectId == patient.subjectId) ?? false;
+      ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+        content: Text(stillAssigned
+          ? 'Assignment ended on the server. Refresh the patient list to confirm.'
+          : 'Patient removed from your assignments. Records were retained.'),
+      ));
+    } on ApiException catch (error) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+        content: Text(switch (error.statusCode) {
+          404 => 'No active assignment was found. Refresh the patient list.',
+          409 => 'Cannot remove this patient while attention events need review.',
+          401 => 'Session expired. Sign in again.',
+          403 => 'You do not have permission to remove this assignment.',
+          _ => error.message,
+        }),
+      ));
+    } catch (_) {
+      if (mounted) ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
+        content: Text('Could not remove this assignment. Please try again.'),
+      ));
+    } finally {
+      if (mounted) setState(() => _removingSubjectId = null);
     }
   }
 
@@ -425,6 +512,11 @@ class _PatientsScreenState extends State<PatientsScreen> {
                           Session.clinicianId == _loadedForClinician
                       ? () => _editLabel(patient)
                       : null,
+                  onRemove: Session.isActive && !snapshot.isFromCache &&
+                          _removingSubjectId == null
+                      ? () => _removePatient(patient)
+                      : null,
+                  removing: _removingSubjectId == patient.subjectId,
                   hasOpenAttention: attentionSubjects.contains(
                     patient.subjectId,
                   ),
@@ -466,6 +558,8 @@ class _AssignedPatientCard extends StatelessWidget {
   final PatientSummary patient;
   final String label;
   final VoidCallback? onEdit;
+  final VoidCallback? onRemove;
+  final bool removing;
   final bool hasOpenAttention;
   final VoidCallback onTap;
 
@@ -473,6 +567,8 @@ class _AssignedPatientCard extends StatelessWidget {
     required this.patient,
     required this.label,
     required this.onEdit,
+    required this.onRemove,
+    required this.removing,
     required this.hasOpenAttention,
     required this.onTap,
   });
@@ -507,6 +603,18 @@ class _AssignedPatientCard extends StatelessWidget {
                   tooltip: 'Edit patient label',
                   onPressed: onEdit,
                   icon: const Icon(Icons.edit_outlined, size: 19),
+                ),
+              if (removing)
+                const SizedBox(
+                  width: 20, height: 20,
+                  child: CircularProgressIndicator(strokeWidth: 2),
+                )
+              else if (onRemove != null)
+                IconButton(
+                  tooltip: 'Remove patient from my list',
+                  onPressed: onRemove,
+                  icon: const Icon(Icons.person_remove_outlined,
+                    size: 19, color: Ds.red),
                 ),
               if (hasOpenAttention)
                 const Text(

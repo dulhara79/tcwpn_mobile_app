@@ -4,6 +4,7 @@ import 'package:intl/intl.dart';
 import '../../data/repositories/p5b_repositories.dart';
 import '../../domain/models.dart';
 import '../../state/clinical_notes_controller.dart';
+import 'clinical_support_set_screen.dart';
 
 class ClinicalNotesScreen extends StatefulWidget {
   final ClinicalNotesController? controller;
@@ -128,6 +129,26 @@ class _ClinicalNotesScreenState extends State<ClinicalNotesScreen> {
               child: Text(
                 'This history is device-local ClinAnx data. It is not server-authoritative note history; no server note-history read contract is currently verified.',
                 style: TextStyle(fontSize: 12),
+              ),
+            ),
+          ),
+          const SizedBox(height: 12),
+          Card(
+            child: ListTile(
+              leading: const Icon(Icons.library_books_outlined),
+              title: const Text('TC-WPN support examples'),
+              subtitle: const Text(
+                'Review patient and site examples used for future note analysis.',
+              ),
+              trailing: const Icon(Icons.chevron_right_rounded),
+              onTap: () => Navigator.push(
+                context,
+                MaterialPageRoute(
+                  builder: (_) => ClinicalSupportSetScreen(
+                    localRecordId: _controller.localRecordId,
+                    clinicianId: _controller.clinicianId,
+                  ),
+                ),
               ),
             ),
           ),
