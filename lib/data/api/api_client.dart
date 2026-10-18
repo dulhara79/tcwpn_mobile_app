@@ -100,6 +100,13 @@ class ApiClient {
     path,
   );
 
+  Future<Map<String, dynamic>> delete(String path, {Duration? timeout}) =>
+      _send(
+        () => _http.delete(_uri(path), headers: _headers)
+            .timeout(timeout ?? Env.quickTimeout),
+        path,
+      );
+
   Future<Map<String, dynamic>> get(
     String path, {
     Duration? timeout,
