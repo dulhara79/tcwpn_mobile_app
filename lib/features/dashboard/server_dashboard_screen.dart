@@ -476,7 +476,7 @@ class _PatientSummaryCard extends StatelessWidget {
     final unavailable = patient.assessmentStatus == AssessmentStatus.unavailable ||
         current == null || current.score == null;
     final partial = patient.assessmentStatus == AssessmentStatus.partial;
-    final tier = unavailable ? RiskTier.unknown : current.tier;
+    final tier = unavailable ? RiskTier.unknown : current!.tier;
     final statusColor = switch (tier) {
       RiskTier.high => Ds.red,
       RiskTier.medium => Ds.amber,
