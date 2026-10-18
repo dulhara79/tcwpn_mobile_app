@@ -73,6 +73,30 @@ void main() {
     SharedPreferences.setMockInitialValues({});
   });
 
+  testWidgets('dashboard heading stays below the Android status bar inset',
+      (tester) async {
+    tester.view.viewPadding = const FakeViewPadding(top: 72);
+    tester.view.devicePixelRatio = 1;
+    addTearDown(() {
+      tester.view.resetViewPadding();
+      tester.view.resetDevicePixelRatio();
+    });
+
+    final controller = DashboardController(
+      repository: _FakeDashboardRepository(_snapshot()),
+    );
+    await controller.load();
+
+    await tester.pumpWidget(
+      MaterialApp(home: Scaffold(
+        body: ServerDashboardScreen(controller: controller),
+      )),
+    );
+
+    final titleTop = tester.getTopLeft(find.text('ClinAnx')).dy;
+    expect(titleTop, greaterThanOrEqualTo(72));
+  });
+
   testWidgets('renders server attention events before assigned patients',
       (tester) async {
     final controller = DashboardController(
